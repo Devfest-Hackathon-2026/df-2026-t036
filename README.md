@@ -4,11 +4,12 @@
 
 環境構築・起動・動作確認・Cloud Runへのデプロイ方法は [environment.md](docs/environment.md) を参照してください。
 
+
 ## 現在の実装範囲
 
 現在は開発用のひな形として、FlutterのAPI接続確認画面、FastAPIの `/health`、DockerによるAPI起動、基本テストを用意しています。
 
-仕様上の目標構成は、Flutter WebをFirebase Hosting、FastAPIをCloud Runに配置し、Firebase Authentication・Cloud Firestore・Cloud Storage・Cloud Schedulerを組み合わせる構成です。これらのクラウド連携や入会・退会、アイデア・作品の機能はまだ実装していません。
+仕様上の目標構成は、Flutter WebをFirebase Hosting、FastAPIをCloud Runに配置し、Firebase Authentication・Cloud Firestore・Cloud Storage・Cloud Schedulerを組み合わせる構成です。これらのクラウド連携やGoogleログイン・アイデア・作品の機能はまだ実装していません。
 
 ## フォルダ構成
 
@@ -40,6 +41,11 @@
 └── docs/                       設計資料
     ├── environment.md           環境構築手順書
     ├── specification.md         M0・M1の総合仕様書
+    ├── database/               DB・API仕様書とDB構造図
+    │   ├── DB_v0.md
+    │   ├── database_v0.html
+    │   ├── database_v0.png
+    │   └── database_v0.svg
     └── architecture/           アーキテクチャ図
         ├── architecture_v0.html
         └── architecture_v0.png
@@ -153,3 +159,7 @@ Flutterアプリの共通コードと、各プラットフォーム向けの設�
 | `flont/build/` | Flutterのビルド出力先です。Web公開用ファイルは `flont/build/web/` に生成されます。 |
 | `.idea/` / `*.iml` | IDEが使用するローカルのプロジェクト設定です。 |
 | `flont/android/local.properties` | ローカル環境のAndroid SDK・Flutter SDKパスなどを記録します。 |
+
+DBのコレクション・ID参照は [DB構造図（HTML）](docs/database/database_v0.html) ／ [PNG](docs/database/database_v0.png) ／ [SVG](docs/database/database_v0.svg) を参照してください。詳細は [DB・API仕様書](docs/database/DB_v0.md) に記載しています。
+
+現行のハッカソン版はGoogleログイン・HEIC・受信箱自動更新と作品既読・累計・タグ・描いた履歴を維持し、通知・退会・名前変更・サムネイル生成は対象外です。名前はランダム生成、メンテナンスはサーバー設定で切り替えます。
