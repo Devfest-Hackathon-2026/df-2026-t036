@@ -20,3 +20,5 @@ dev_dependencies:
 flutter:
   # 標準のMaterialアイコンを有効にする。
   uses-material-design: true
+  assets:
+    - assets/images/
