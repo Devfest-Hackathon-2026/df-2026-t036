@@ -1,0 +1,13 @@
+services:
+  api:
+    build: ./back
+    ports:
+      - "8080:8080"
+    environment:
+      # Flutter Webの起動ポートと揃える。
+      CORS_ORIGINS: http://localhost:3000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

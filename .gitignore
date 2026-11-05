@@ -1,0 +1,22 @@
+# ローカル環境や認証情報は共有しない。
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+.idea/
+.vscode/
+
+# 図の生成に使用する一時ツールとロゴは共有対象から除外する。
+.tmp/
+
+# Flutterのローカル生成物をルート設定でも明示的に除外する。
+/flont/.dart_tool/
+/flont/build/
+/flont/android/local.properties
+
+# IDEが生成するプロジェクトファイルは配置場所を問わず除外する。
+*.iml
