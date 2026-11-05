@@ -1,6 +1,9 @@
 
 import 'package:flutter/material.dart';
 import '../widgets/profile_card.dart';
+import 'idea_history_screen.dart';
+import 'drawing_history_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -20,7 +23,17 @@ class ProfileScreen extends StatelessWidget {
                   'マイページ',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const Icon(Icons.settings_outlined),
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
 
@@ -56,19 +69,37 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            const Card(
+            Card(
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(Icons.lightbulb_outline),
-                    title: Text('アイデア履歴'),
-                    subtitle: Text('投稿したお題を確認する'),
+                    leading: const Icon(Icons.lightbulb_outline),
+                    title: const Text('アイデア履歴'),
+                    subtitle: const Text('投稿したお題を確認する'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const IdeaHistoryScreen(),
+                        ),
+                      );
+                    },
                   ),
-                  Divider(height: 1),
+                  const Divider(height: 1),
                   ListTile(
-                    leading: Icon(Icons.brush_outlined),
-                    title: Text('描いた履歴'),
-                    subtitle: Text('参加したお題を振り返る'),
+                    leading: const Icon(Icons.brush_outlined),
+                    title: const Text('描いた履歴'),
+                    subtitle: const Text('参加したお題を振り返る'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DrawingHistoryScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
