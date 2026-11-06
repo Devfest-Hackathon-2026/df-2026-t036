@@ -23,4 +23,6 @@ flutter:
   # 標準のMaterialアイコンを有効にする。
   uses-material-design: true
   assets:
+    # FirebaseのWeb公開設定を同梱する。Admin SDKの秘密鍵は入れない。
+    - firebase-config.local.json
     - assets/images/
