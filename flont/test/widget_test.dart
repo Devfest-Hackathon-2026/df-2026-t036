@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:illustration_exchange/main.dart';
+import 'package:illustration_exchange/screens/inbox_screen.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
 import 'package:illustration_exchange/screens/profile_screen.dart';
 import 'package:illustration_exchange/widgets/profile_card.dart';
 
 void main() {
+  testWidgets('受信箱の空状態を表示する', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: InboxScreen())),
+    );
+
+    expect(find.text('受信箱'), findsOneWidget);
+    expect(find.text('まだ作品は届いていません'), findsOneWidget);
+  });
+
   testWidgets('登録APIの本人情報をプロフィールへ表示する', (tester) async {
     // サンプル値ではなく、登録された名前と累計が画面へ渡ることを確認する。
     await tester.pumpWidget(
