@@ -47,7 +47,7 @@ cd ./-Illustration-exchange
 
 ## 3. APIをDockerで起動（推奨）
 
-初回は ack/.env.example を ack/.local.env へコピーし、プロジェクトIDなどを設定してください。既存ファイルは上書きしません。Composeが起動時に自動読込し、イメージには同梱しません。設定変更後は docker compose up -d --force-recreate で反映します。Google Cloudの認証情報はenvとは別に渡す必要があり、ADCの受け渡しは [Firebase設定](back/firebase-auth.md) を参照してください。
+Composeは `back/.env` の設定を起動時に読み込み、イメージには同梱しません。設定変更後は `docker compose up -d --force-recreate` で反映します。Google Cloudの認証情報はenvとは別に渡す必要があり、ADCの受け渡しは [Firebase設定](back/firebase-auth.md) を参照してください。
 
 
 ```powershell
@@ -66,11 +66,13 @@ macOS/Linuxでは `curl.exe` を `curl` に読み替えてください。
 
 ## 4. APIをPythonで起動（Dockerの代替）
 
-Windows PowerShell:
+Windows PowerShell（初回、または依存関係を更新するとき）:
 
 ```powershell
 python -m venv back/.venv
 ./back/.venv/Scripts/python.exe -m pip install -r back/requirements-dev.txt
+
+# 通常の起動
 cd back
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 ```
@@ -85,6 +87,8 @@ cd back
 ```
 
 Docker版とPython版は同じポートを使用するため、一方のみ起動します。終了は `Ctrl+C` です。
+
+Dockerイメージは `back/requirements.txt` を使ってビルドします。Python環境の依存関係を更新した場合は、同じファイルを更新してから `docker compose build --no-cache api`、続けて `docker compose up -d --force-recreate api` を実行すると、Docker側にも同じ依存関係が反映されます。Python環境にだけ追加した開発用依存（pytestなど）は、実行用イメージには入りません。
 
 ## 5. Flutter Webを起動
 
