@@ -7,6 +7,8 @@ environment:
   sdk: ^3.10.7
 
 dependencies:
+  firebase_auth: ^7.0.1
+  firebase_core: ^5.1.0
   flutter:
     sdk: flutter
   google_fonts: ^9.0.0

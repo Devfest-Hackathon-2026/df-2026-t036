@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/main_screen.dart';
+import 'auth_gate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() {
@@ -7,7 +7,10 @@ void main() {
 }
 
 class IllustrationExchangeApp extends StatelessWidget {
-  const IllustrationExchangeApp({super.key});
+  const IllustrationExchangeApp({super.key, this.home});
+
+  // 画面単体のテストでは認証サービスへの接続を差し替えられる。
+  final Widget? home;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +26,7 @@ class IllustrationExchangeApp extends StatelessWidget {
           fontFamily: GoogleFonts.mPlusRounded1c().fontFamily,
         ),
       ),
-      home: const MainScreen(),
+      home: home ?? const AuthGate(),
     );
   }
 }
