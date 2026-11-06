@@ -6,10 +6,11 @@ import 'inbox_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key, this.me});
+  const MainScreen({super.key, this.me, this.googleEmail});
 
   // 登録APIが返した本人情報をマイページへ渡す。
   final Map<String, dynamic>? me;
+  final String? googleEmail;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -22,7 +23,7 @@ class _MainScreenState extends State<MainScreen> {
     TimelineScreen(),
     IdeasScreen(),
     InboxScreen(),
-    ProfileScreen(me: widget.me),
+    ProfileScreen(me: widget.me, googleEmail: widget.googleEmail),
   ];
 
   @override

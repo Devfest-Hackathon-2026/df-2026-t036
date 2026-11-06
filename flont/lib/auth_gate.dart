@@ -169,7 +169,9 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_me != null) return MainScreen(me: _me);
+    if (_me != null) {
+      return MainScreen(me: _me, googleEmail: _auth?.currentUser?.email);
+    }
     // APIが返した既存のDB情報を取得できた場合にだけメイン画面へ進む。
     return LoginScreen(
       busy: _busy,

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.nickname, this.googleEmail});
+
+  final String? nickname;
+  final String? googleEmail;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -30,36 +33,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final googleEmail =
+        widget.googleEmail ?? FirebaseAuth.instance.currentUser?.email;
+
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
       body: ListView(
         children: [
-          ListTile(leading: Icon(Icons.edit_outlined), title: Text('ニックネーム変更')),
           ListTile(
-            leading: Icon(Icons.account_circle_outlined),
-            title: Text('Googleアカウント情報'),
+            leading: const Icon(Icons.person_outline),
+            title: const Text('表示名'),
+            subtitle: Text(widget.nickname ?? '取得できません'),
           ),
-          Divider(),
           ListTile(
-            leading: Icon(Icons.logout),
+            leading: const Icon(Icons.account_circle_outlined),
+            title: const Text('Googleアカウント'),
+            subtitle: Text(googleEmail ?? 'メールアドレスを取得できません'),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
             title: Text(_signingOut ? 'ログアウト中…' : 'ログアウト'),
             enabled: !_signingOut,
             onTap: _signingOut ? null : _signOut,
           ),
+          const Divider(),
           ListTile(
-            leading: Icon(Icons.delete_forever_outlined),
-            title: Text('退会'),
-          ),
-          Divider(),
-          ListTile(
-            leading: Icon(Icons.description_outlined),
-            title: Text('利用規約'),
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('利用規約'),
           ),
           ListTile(
-            leading: Icon(Icons.privacy_tip_outlined),
-            title: Text('プライバシーポリシー'),
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('プライバシーポリシー'),
           ),
-          ListTile(leading: Icon(Icons.mail_outline), title: Text('お問い合わせ')),
+          ListTile(
+            leading: const Icon(Icons.mail_outline),
+            title: const Text('お問い合わせ'),
+          ),
         ],
       ),
     );

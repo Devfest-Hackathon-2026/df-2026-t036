@@ -4,9 +4,42 @@ import 'package:illustration_exchange/main.dart';
 import 'package:illustration_exchange/screens/inbox_screen.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
 import 'package:illustration_exchange/screens/profile_screen.dart';
+import 'package:illustration_exchange/screens/settings_screen.dart';
 import 'package:illustration_exchange/widgets/profile_card.dart';
 
 void main() {
+  testWidgets(
+    'debugプレビューで認証なしにメイン画面を表示する',
+    (tester) async {
+      await tester.pumpWidget(const IllustrationExchangeApp());
+
+      expect(find.byType(MainScreen), findsOneWidget);
+      expect(find.text('タイムライン'), findsOneWidget);
+    },
+    skip: !const bool.fromEnvironment('DEV_PREVIEW'),
+  );
+
+  testWidgets('設定に表示名とGoogleアカウントを表示し対象外項目を出さない', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SettingsScreen(
+          nickname: 'そらのえふで1234',
+          googleEmail: 'artist@example.com',
+        ),
+      ),
+    );
+
+    expect(find.text('表示名'), findsOneWidget);
+    expect(find.text('そらのえふで1234'), findsOneWidget);
+    expect(find.text('artist@example.com'), findsOneWidget);
+    expect(find.text('ログアウト'), findsOneWidget);
+    expect(find.text('利用規約'), findsOneWidget);
+    expect(find.text('プライバシーポリシー'), findsOneWidget);
+    expect(find.text('お問い合わせ'), findsOneWidget);
+    expect(find.text('ニックネーム変更'), findsNothing);
+    expect(find.text('退会'), findsNothing);
+  });
+
   testWidgets('受信箱の空状態を表示する', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: InboxScreen())),
@@ -35,6 +68,23 @@ void main() {
     expect(card.ideaCount, 0);
     expect(card.drawingCount, 3);
     expect(card.likeCount, 2);
+  });
+
+  testWidgets('プロフィールから設定へ表示名とGoogleアカウントを引き継ぐ', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ProfileScreen(
+          me: {'nickname': 'そらのえふで1234'},
+          googleEmail: 'artist@example.com',
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('そらのえふで1234'), findsOneWidget);
+    expect(find.text('artist@example.com'), findsOneWidget);
   });
 
   testWidgets('基本画面とナビゲーションを表示する', (tester) async {
