@@ -5,10 +5,11 @@ import 'drawing_history_screen.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, this.me});
+  const ProfileScreen({super.key, this.me, this.googleEmail});
 
   // ログインしたユーザーの名前と実際の累計を表示する。
   final Map<String, dynamic>? me;
+  final String? googleEmail;
 
   @override
   Widget build(BuildContext context) {
@@ -21,10 +22,7 @@ class ProfileScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'マイページ',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
+                Text('マイページ', style: Theme.of(context).textTheme.headlineSmall),
                 // 本人情報の表示を維持し、設定画面への遷移も取り込む。
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
@@ -32,7 +30,10 @@ class ProfileScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
+                        builder: (_) => SettingsScreen(
+                          nickname: me?['nickname'] as String?,
+                          googleEmail: googleEmail,
+                        ),
                       ),
                     );
                   },
