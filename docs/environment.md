@@ -86,6 +86,7 @@ Docker版とPython版は同じポートを使用するため、一方のみ起�
 ## 5. Flutter Webを起動
 
 通常のGoogleログイン・DB接続と、認証なしのデザインプレビューは [Flutter起動手順](../flont/README.md) にまとめています。初回のFirebase・ADC設定は [Firebase認証の設定手順](back/firebase-auth.md) を参照してください。
+GoogleログインとFirestoreへの初回ユーザー登録には、先に [Firebase認証の設定手順](back/firebase-auth.md) を実施し、同手順の `--dart-define-from-file` 付きコマンドで起動します。
 
 `flont/firebase-config.local.json` を用意すれば、Chromeを選んで `flutter run` だけで設定を読み込めます。通常利用にはAPIも必要です。Flutterの可変ポートを使う場合は、API起動前に開発環境限定で `CORS_ALLOW_LOCALHOST=true` を設定してください。設定例・固定ポートでの起動・停止・エラー対処もFlutter起動手順に記載しています。
 

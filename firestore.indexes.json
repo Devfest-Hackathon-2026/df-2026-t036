@@ -1,0 +1,24 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "ideas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "deletedAt", "order": "ASCENDING"},
+        {"fieldPath": "publishedUntil", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "ideas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerId", "order": "ASCENDING"},
+        {"fieldPath": "deletedAt", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
