@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'screens/main_screen.dart';
+import 'screens/login_screen.dart';
 
 /// GoogleログインとAPI側の登録が両方成功してからメイン画面を表示する。
 class AuthGate extends StatefulWidget {
@@ -168,50 +169,25 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_me != null) return MainScreen(me: _me);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Illustration Exchange')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Googleアカウントで始める', style: TextStyle(fontSize: 24)),
-                const SizedBox(height: 16),
-                const Text('表示名は登録時に自動で決まります。Googleの本名は表示しません。'),
-                const SizedBox(height: 24),
-                if (_busy) const CircularProgressIndicator(),
-                if (_error != null) ...[
-                  Text(_error!),
-                  const SizedBox(height: 16),
-                ],
-                if (!_busy && _ready)
-                  FilledButton(
-                    onPressed: () {
-                      final user = _auth!.currentUser;
-                      if (user == null) {
-                        _signIn();
-                      } else {
-                        _onUserChanged(user);
-                      }
-                    },
-                    child: Text(
-                      _auth!.currentUser == null ? 'Googleでログイン' : 'ユーザー登録を再試行',
-                    ),
-                  ),
-                if (!_busy && _ready && _auth!.currentUser != null)
-                  TextButton(
-                    onPressed: () => _auth!.signOut(),
-                    child: const Text('別のアカウントでログイン'),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    if (_me != null) {
+      return MainScreen(me: _me, googleEmail: _auth?.currentUser?.email);
+    }
+    // APIが返した既存のDB情報を取得できた場合にだけメイン画面へ進む。
+    return LoginScreen(
+      busy: _busy,
+      error: _error,
+      hasAccount: _auth?.currentUser != null,
+      onSignIn: !_ready
+          ? null
+          : () {
+              final user = _auth!.currentUser;
+              if (user == null) {
+                _signIn();
+              } else {
+                _onUserChanged(user);
+              }
+            },
+      onSignOut: _ready ? () => _auth!.signOut() : null,
     );
   }
 }
