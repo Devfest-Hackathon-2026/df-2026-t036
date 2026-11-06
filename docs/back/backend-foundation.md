@@ -19,7 +19,7 @@
 
 ## 設定
 
-`back/.env.example` は見本です。`.env` ファイルの自動読込は実装していません。PowerShellでは次のように設定してからAPIを起動します。
+`back/.env.example` を `back/.local.env` にコピーして設定すると、Python直接起動時は作業ディレクトリに関係なく自動で読み込みます。環境変数はファイルより優先されます。以下のように環境変数を明示する方法も利用できます。
 
 ```powershell
 $env:GOOGLE_CLOUD_PROJECT = 'YOUR_PROJECT_ID'
@@ -32,7 +32,7 @@ cd back
 
 `MAINTENANCE_MODE` はtrue/falseのみ、再試行秒数は正整数です。CORSはカンマ区切りの明示的なOriginを指定し、ワイルドカードは拒否します。ローカル開発時だけ `CORS_ALLOW_LOCALHOST=true` を指定すると、HTTPのlocalhost・127.0.0.1の可変ポートも許可します。既定はfalseで、本番では有効にしません。認証付きPOSTと今後の削除・更新に対応しています。
 
-設定変更は再起動で反映します。Cloud Runでは同じ設定を持つリビジョンへ切り替え、旧リビジョンへトラフィックが残っていないことを確認します。ローカル環境変数はDockerへ自動で渡らないため、Compose利用時は別途environmentとADCの受け渡しが必要です。
+設定変更は再起動で反映します。Cloud Runでは同じ設定を持つリビジョンへ切り替え、旧リビジョンへトラフィックが残っていないことを確認します。Composeは `back/.local.env` を `env_file` で自動的に渡します。envファイルはDockerイメージには含めません。ADCは別途読み取り専用マウントと `GOOGLE_APPLICATION_CREDENTIALS` の設定が必要です。Cloud Runではサービスに設定した環境変数と実行サービスアカウントを利用します。
 
 ## 認証・認可
 
@@ -82,3 +82,9 @@ cd back
 ```
 
 外部サービスを差し替えたテストで、認証・登録の回帰、エラー・CORS・ログ、厳密な入力、UTC境界、一覧契約、メンテナンスを検証します。実際のFirebaseでの認証・競合・IAM権限とCloud Run全インスタンスの設定反映は別途確認が必要です。
+
+## APIとFlutterの設定の分離
+
+APIは `back/.local.env` または環境変数から設定を取得します。環境変数が優先されます。`GOOGLE_CLOUD_PROJECT` には利用するFirebaseプロジェクトIDを明示してください。
+
+Flutterは `flont/firebase-config.local.json` を使用します。APIはこのJSONを読み込まず、Composeでも共有しません。同じFirebaseプロジェクトを利用する場合は、両方に同じプロジェクトIDをそれぞれ設定してください。APIのenv自動読み込みとComposeの `env_file` は引き続き利用できます。
