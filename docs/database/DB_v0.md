@@ -171,6 +171,30 @@ JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後�
 
 名前変更・通知・退会のAPIは作らない。画像APIはCache-Control: private, no-store、保存APIはContent-Disposition: attachmentを付ける。公開URLや署名URLへのリダイレクトを返さない。
 
+### 実装進捗（2026-11-06）
+
+以下はこのリポジトリのFastAPIコード上の実装状況。**実装済みはコードがある状態を示し、実Firebase／Firestore／Storageを使った本番相当の動作確認完了を意味しない。**
+
+| 状態 | API | 実装内容・残作業 |
+|---|---|---|
+| 実装済み | `GET /health` | 起動確認。認証・外部サービス接続を必要としない。 |
+| 実装済み | `POST /users/register`、`GET /me` | Google IDトークン検証、初回登録、本人情報と累計取得。 |
+| 実装済み | `/ideas`、`/me/ideas`、`/me/slots`、`/me/pins`、`/pins/{ideaId}` | お題の作成・閲覧・削除、枠、ピンの取得・操作。Firestore処理を含む。 |
+| 実装済み・未動作確認 | `GET /me/drawn-history` | 描いた履歴と参照可能なお題、いいね状態をページ取得。 |
+| 実装済み・未動作確認 | `GET /me/artworks/inbox` | 有効な受信作品のメタデータ、描き手名、既読・いいね状態をページ取得。画像は扱わない。 |
+| 実装済み・未動作確認 | `POST /artworks/{submissionId}/read` | 受信者の初回既読時刻を冪等に記録。Flutterは画像表示成功後に呼ぶ。 |
+| 実装済み・未動作確認 | `POST /artworks/{submissionId}/like` | 受信者のいいねを一度だけ反映し、描き手の履歴と累計を更新。 |
+| 未実装 | `POST /artworks/prepare` | 送信資格・入力画像条件を確認し、一時アップロード用セッションと制限付きアップロード先を発行する。Cloud Storage連携が必要。 |
+| 未実装 | `POST /artworks/commit` | アップロード実体・形式・サイズ・送信資格を再検証し、画像を正規化して作品・描いた履歴・累計・セッション状態を一度だけ確定する。Cloud StorageとFirestoreの回復可能な連携が必要。 |
+| 未実装 | `GET /artworks/{submissionId}/image` | 受信者・期限・削除状態を確認して画像を認証付きで返す。Cloud Storage連携が必要。公開URLや長期有効URLは返さない。 |
+| 未実装 | `GET /artworks/{submissionId}/download` | 画像APIと同じ認可を適用し、正規化画像を添付ファイルとして返す。Cloud Storage連携が必要。 |
+| 未実装 | `DELETE /artworks/{submissionId}` | 受信者のみ作品を即時不可視化する。画像の物理削除は定期整理で再試行できるようにする。 |
+| 未実装 | `POST /internal/cleanup` | 内部呼び出しを認証し、期限切れ作品・一時セッション・一時画像・無効ピン等を上限付きで整理する。Cloud Storage連携とScheduler等の呼出設定が必要。 |
+
+未実装の作品送信・画像取得・削除・期限整理は、メタデータAPIとは別の作業段階。特にprepare/commitおよびimage/download/cleanupはCloud Storageを伴う。read/like・履歴・受信箱は画像バイト列を扱わない。Flutter側では画像が表示できてからreadを呼び、Storage実体の受け渡しとAPI認可を分離する。
+
+現状、描いた履歴・受信箱・既読・いいねの追加コードはテスト実行環境の問題でpytest未実行であり、Firebase実データを用いた統合確認も未完了。Firestore複合インデックスをデプロイする環境では、同梱の `firestore.indexes.json` も適用する。
+
 Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaはお題の保存項目とideaId / ownerNickname / canPin / canSubmit。InboxItemはsubmissionId / artistId / artistNickname / sourceIdeaId / sourceIdeaSnapshot / liked / readAt / createdAt / expiresAt。Storageパスは返さない。履歴はsubmissionId / ideaId / submittedAt / lastLiked / idea / ideaAvailability、参照不可ならideaはnull。
 
 ### 一覧・受信箱の自動更新（確定方針）
