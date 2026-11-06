@@ -56,7 +56,7 @@ class LoginScreen extends StatelessWidget {
                             SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                'Illustration Exchange',
+                                'EOCURU',
                                 style: TextStyle(
                                   color: _ink,
                                   fontSize: 18,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// EWOCURUの配色を一元管理し、独自描画の装飾でも同じ色を使う。
+/// EOCURUの配色を一元管理し、独自描画の装飾でも同じ色を使う。
 abstract final class AppColors {
   static const main = Color(0xFFC7EDFF);
   static const sub = Color(0xFF173C70);

@@ -17,7 +17,7 @@ class IllustrationExchangeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Illustration Exchange',
+      title: 'EOCURU',
       // 接続確認画面を単独起動しても同じテーマを使用する。
       theme: AppTheme.light,
       home: const ConnectionPage(),
@@ -64,7 +64,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Illustration Exchange')),
+      appBar: AppBar(title: const Text('EOCURU')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

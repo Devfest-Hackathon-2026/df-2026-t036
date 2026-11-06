@@ -20,7 +20,8 @@ class IllustrationExchangeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // 共通テーマをルートで設定し、遷移先の画面にも継承する。
     return MaterialApp(
-      title: 'Illustration Exchange',
+      // アプリ切替やブラウザで使用する表示名。
+      title: 'EOCURU',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       // 開発プレビューはデバッグ時だけ有効にし、通常は認証画面から開始する。
