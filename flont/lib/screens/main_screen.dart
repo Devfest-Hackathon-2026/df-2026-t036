@@ -6,11 +6,17 @@ import 'inbox_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key, this.me, this.googleEmail});
+  const MainScreen({
+    super.key,
+    this.me,
+    this.googleEmail,
+    this.apiBaseUrl = 'http://localhost:8080',
+  });
 
   // 登録APIが返した本人情報をマイページへ渡す。
   final Map<String, dynamic>? me;
   final String? googleEmail;
+  final String apiBaseUrl;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -21,7 +27,10 @@ class _MainScreenState extends State<MainScreen> {
 
   List<Widget> get _pages => [
     TimelineScreen(),
-    IdeasScreen(),
+    IdeasScreen(
+      apiBaseUrl: widget.apiBaseUrl,
+      authenticated: widget.me != null,
+    ),
     InboxScreen(),
     ProfileScreen(me: widget.me, googleEmail: widget.googleEmail),
   ];
@@ -29,10 +38,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('EOCURU'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('EOCURU'), centerTitle: true),
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,

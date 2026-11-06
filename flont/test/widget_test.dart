@@ -2,6 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:illustration_exchange/main.dart';
+import 'package:illustration_exchange/screens/idea_composer_screen.dart';
+import 'package:illustration_exchange/screens/idea_detail_screen.dart';
 import 'package:illustration_exchange/screens/ideas_screen.dart';
 import 'package:illustration_exchange/screens/inbox_screen.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
@@ -93,34 +95,42 @@ void main() {
     expect(find.text('枠 1'), findsOneWidget);
   });
 
-  testWidgets('マウスクリックでは揺れずドラッグで次のカードへ進む', (tester) async {
+  testWidgets('マウスクリックでは傾かず空き枠フォームを開く', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: IdeasScreen())),
     );
-    final card = find.byKey(const ValueKey('idea-slot-1'));
     final transformFinder = find.byKey(
       const ValueKey('idea-tilt-card-1-transform'),
     );
-    final center = tester.getCenter(card);
+    final center = tester.getCenter(find.byKey(const ValueKey('idea-slot-1')));
 
     final click = await tester.startGesture(
       center,
       kind: PointerDeviceKind.mouse,
     );
-    await click.up();
-    await tester.pumpAndSettle();
-
-    expect(find.text('1 / 5'), findsOneWidget);
+    await tester.pump();
     expect(
       tester.widget<AnimatedContainer>(transformFinder).transform!.entry(0, 2),
       closeTo(0, 0.001),
     );
+    await click.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('アイデアを作成'), findsOneWidget);
+  });
+
+  testWidgets('マウスドラッグで次のカードへ進む', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+    final carousel = find.byKey(const ValueKey('idea-carousel'));
+    final center = tester.getCenter(carousel);
 
     final drag = await tester.startGesture(
       center,
       kind: PointerDeviceKind.mouse,
     );
-    await drag.moveBy(const Offset(-400, 0));
+    await drag.moveBy(const Offset(-500, 0));
     await tester.pump();
     await drag.up();
     await tester.pumpAndSettle();
@@ -178,6 +188,84 @@ void main() {
     );
 
     expect(carouselRect.width - cardRect.width, greaterThanOrEqualTo(32));
+  });
+
+  testWidgets('アイデアを確認プレビューしてから投稿する', (tester) async {
+    IdeaDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: IdeaComposerScreen(onSubmit: (draft) async => submitted = draft),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('idea-title-input')),
+      '雨の日の小さな喫茶店',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('idea-description-input')),
+      '窓辺で本を読む猫と、湯気の立つココア。',
+    );
+    await tester.enterText(find.byKey(const ValueKey('idea-tag-input')), '日常');
+    await tester.tap(find.byKey(const ValueKey('idea-add-tag')));
+    await tester.pumpAndSettle();
+
+    final previewButton = find.byKey(const ValueKey('idea-preview-button'));
+    await tester.ensureVisible(previewButton);
+    await tester.pumpAndSettle();
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+    expect(find.text('投稿内容の確認'), findsOneWidget);
+    expect(find.text('雨の日の小さな喫茶店'), findsOneWidget);
+    expect(find.text('投稿後は内容を編集できません。'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('idea-submit-button')));
+    await tester.pumpAndSettle();
+
+    expect(submitted?.title, '雨の日の小さな喫茶店');
+    expect(submitted?.description, '窓辺で本を読む猫と、湯気の立つココア。');
+    expect(submitted?.tags, ['日常']);
+  });
+
+  testWidgets('空き枠を選ぶとアイデア作成フォームを開く', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('idea-slot-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('アイデアを作成'), findsOneWidget);
+    expect(find.byKey(const ValueKey('idea-title-input')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('idea-description-input')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('アイデア詳細に説明・タグ・掲載残り時間を表示する', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: IdeaDetailScreen(
+          idea: IdeaSlotData(
+            ideaId: 'preview-idea',
+            title: '夜明けを待つ庭',
+            expiresAt: DateTime.now().add(const Duration(days: 3, hours: 2)),
+            previewDescription: '青い花が咲く庭に、朝日が差し込む景色。',
+            previewTags: const ['風景', 'ファンタジー'],
+          ),
+          apiBaseUrl: 'http://localhost:8080',
+          authenticated: false,
+          preview: true,
+        ),
+      ),
+    );
+
+    expect(find.text('夜明けを待つ庭'), findsOneWidget);
+    expect(find.text('青い花が咲く庭に、朝日が差し込む景色。'), findsOneWidget);
+    expect(find.text('風景'), findsOneWidget);
+    expect(find.text('ファンタジー'), findsOneWidget);
+    expect(find.textContaining('掲載終了まであと3日'), findsOneWidget);
   });
 
   testWidgets('ページ境界で回転が隣のカードへ連続して移る', (tester) async {
