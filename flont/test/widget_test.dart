@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:illustration_exchange/main.dart';
+import 'package:illustration_exchange/screens/ideas_screen.dart';
 import 'package:illustration_exchange/screens/inbox_screen.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
 import 'package:illustration_exchange/screens/profile_screen.dart';
@@ -64,6 +66,234 @@ void main() {
 
     expect(find.text('受信箱'), findsOneWidget);
     expect(find.text('まだ作品は届いていません'), findsOneWidget);
+  });
+
+  testWidgets('アイデアカードをスワイプとボタンで切り替える', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    expect(find.text('掲載中 0 / 5'), findsOneWidget);
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('枠 1'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('idea-carousel')),
+      const Offset(-400, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 5'), findsOneWidget);
+    expect(find.text('枠 2'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('前のアイデア'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('枠 1'), findsOneWidget);
+  });
+
+  testWidgets('マウスクリックでは揺れずドラッグで次のカードへ進む', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+    final card = find.byKey(const ValueKey('idea-slot-1'));
+    final transformFinder = find.byKey(
+      const ValueKey('idea-tilt-card-1-transform'),
+    );
+    final center = tester.getCenter(card);
+
+    final click = await tester.startGesture(
+      center,
+      kind: PointerDeviceKind.mouse,
+    );
+    await click.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(
+      tester.widget<AnimatedContainer>(transformFinder).transform!.entry(0, 2),
+      closeTo(0, 0.001),
+    );
+
+    final drag = await tester.startGesture(
+      center,
+      kind: PointerDeviceKind.mouse,
+    );
+    await drag.moveBy(const Offset(-400, 0));
+    await tester.pump();
+    await drag.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 5'), findsOneWidget);
+  });
+
+  testWidgets('画面中央から離れた方向に応じてカードが傾く', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    final carouselRect = tester.getRect(
+      find.byKey(const ValueKey('idea-carousel')),
+    );
+    final drag = await tester.startGesture(carouselRect.center);
+    await drag.moveBy(Offset(-carouselRect.width * 0.25, 0));
+    await tester.pump();
+
+    final leftCard = find.byKey(const ValueKey('idea-slot-1'));
+    final rightCard = find.byKey(const ValueKey('idea-slot-2'));
+    expect(tester.getCenter(leftCard).dx, lessThan(carouselRect.center.dx));
+    expect(tester.getCenter(rightCard).dx, greaterThan(carouselRect.center.dx));
+
+    final leftRotation = tester
+        .widget<AnimatedContainer>(
+          find.byKey(const ValueKey('idea-tilt-card-1-transform')),
+        )
+        .transform!
+        .entry(0, 2);
+    final rightRotation = tester
+        .widget<AnimatedContainer>(
+          find.byKey(const ValueKey('idea-tilt-card-2-transform')),
+        )
+        .transform!
+        .entry(0, 2);
+    expect(leftRotation, lessThan(0));
+    expect(rightRotation, greaterThan(0));
+    expect(rightRotation.abs(), greaterThan(leftRotation.abs()));
+
+    await drag.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('カルーセルの各カードに左右の間隔がある', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    final carouselRect = tester.getRect(
+      find.byKey(const ValueKey('idea-carousel')),
+    );
+    final cardRect = tester.getRect(
+      find.byKey(const ValueKey('idea-tilt-card-1-transform')),
+    );
+
+    expect(carouselRect.width - cardRect.width, greaterThanOrEqualTo(32));
+  });
+
+  testWidgets('ページ境界で回転が隣のカードへ連続して移る', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    final carouselRect = tester.getRect(
+      find.byKey(const ValueKey('idea-carousel')),
+    );
+    final drag = await tester.startGesture(carouselRect.center);
+    await drag.moveBy(const Offset(-330, 0));
+    await tester.pump();
+
+    final previousRotation = tester
+        .widget<AnimatedContainer>(
+          find.byKey(const ValueKey('idea-tilt-card-1-transform')),
+        )
+        .transform!
+        .entry(0, 2);
+    final nextRotation = tester
+        .widget<AnimatedContainer>(
+          find.byKey(const ValueKey('idea-tilt-card-2-transform')),
+        )
+        .transform!
+        .entry(0, 2);
+
+    expect(previousRotation.abs(), greaterThan(0.02));
+    expect(nextRotation.abs(), greaterThan(0.02));
+    expect(previousRotation.sign, -nextRotation.sign);
+    expect(
+      previousRotation.abs() / nextRotation.abs(),
+      inInclusiveRange(0.5, 2.0),
+    );
+
+    await drag.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('慣性移動中でも次のカードを続けて回転できる', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    final carousel = find.byKey(const ValueKey('idea-carousel'));
+    final carouselRect = tester.getRect(carousel);
+    final firstDrag = await tester.startGesture(carouselRect.center);
+    await firstDrag.moveBy(const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await firstDrag.up();
+    await tester.pump(const Duration(milliseconds: 40));
+
+    expect(find.text('2 / 5'), findsOneWidget);
+
+    final secondCardRect = tester.getRect(
+      find.byKey(const ValueKey('idea-slot-2')),
+    );
+    final secondDrag = await tester.startGesture(
+      secondCardRect.intersect(carouselRect).center,
+    );
+    await secondDrag.moveBy(const Offset(-60, 0));
+    await tester.pump();
+
+    final activeSecondCard = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('idea-tilt-card-2-transform')),
+    );
+    expect(activeSecondCard.duration, Duration.zero);
+    expect(activeSecondCard.transform!.entry(0, 2).abs(), greaterThan(0.005));
+
+    await secondDrag.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('カードがスマホ画面の高さに広がる', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('idea-carousel'))).height,
+      greaterThan(600),
+    );
+  });
+
+  testWidgets('タッチ位置に合わせてカードが傾き、離すと戻る', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: IdeasScreen())),
+    );
+
+    final transformFinder = find.byKey(
+      const ValueKey('idea-tilt-card-1-transform'),
+    );
+    final cardRect = tester.getRect(find.byKey(const ValueKey('idea-slot-1')));
+    final gesture = await tester.startGesture(
+      Offset(cardRect.left + cardRect.width * 0.2, cardRect.center.dy),
+    );
+    await gesture.moveBy(const Offset(-100, 4));
+    await tester.pump(const Duration(milliseconds: 60));
+
+    final activeCard = tester.widget<AnimatedContainer>(transformFinder);
+    expect(activeCard.duration, Duration.zero);
+    final tilted = activeCard.transform!;
+    expect(tilted.entry(0, 2).abs(), greaterThan(0.02));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final released = tester
+        .widget<AnimatedContainer>(transformFinder)
+        .transform!;
+    expect(released.entry(0, 2), closeTo(0, 0.001));
   });
 
   testWidgets('登録APIの本人情報をプロフィールへ表示する', (tester) async {
