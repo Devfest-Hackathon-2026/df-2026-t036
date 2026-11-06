@@ -1,4 +1,4 @@
-{
+﻿{
   "API_BASE_URL": "http://localhost:8080",
   "FIREBASE_API_KEY": "YOUR_WEB_API_KEY",
   "FIREBASE_APP_ID": "YOUR_WEB_APP_ID",
