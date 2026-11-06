@@ -170,17 +170,47 @@ class _IdeasScreenState extends State<IdeasScreen> {
     );
   }
 
-  void _openDetail(IdeaSlotData idea) {
+  void _openDetail(IdeaSlotData idea, int slotIndex) {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => IdeaDetailScreen(
           idea: idea,
           apiBaseUrl: widget.apiBaseUrl,
           authenticated: widget.authenticated,
+          onDelete: () => _deleteIdea(idea, slotIndex),
           preview: _isPreview,
         ),
       ),
     );
+  }
+
+  Future<void> _deleteIdea(IdeaSlotData idea, int slotIndex) async {
+    if (_isPreview) {
+      if (mounted) setState(() => _slotIdeas[slotIndex] = null);
+      return;
+    }
+    if (!widget.authenticated) {
+      throw StateError('アイデアを削除するにはログインしてください。');
+    }
+
+    final token = await _getIdToken();
+    final response = await http
+        .delete(
+          Uri.parse(
+            '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
+            '/api/v1/ideas/${idea.ideaId}',
+          ),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 204) {
+      throw StateError(_messageFromResponse(response));
+    }
+
+    if (mounted) {
+      setState(() => _slotIdeas[slotIndex] = null);
+      await _loadSlots(showLoading: false);
+    }
   }
 
   Future<void> _submitIdea(
@@ -302,7 +332,7 @@ class _IdeasScreenState extends State<IdeasScreen> {
         pressedSlotIndex < _slotCount) {
       final idea = _slotIdeas[pressedSlotIndex];
       if (idea != null) {
-        _openDetail(idea);
+        _openDetail(idea, pressedSlotIndex);
       } else if (!_isLoading) {
         _openComposer(pressedSlotIndex);
       }

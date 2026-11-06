@@ -256,6 +256,7 @@ void main() {
           ),
           apiBaseUrl: 'http://localhost:8080',
           authenticated: false,
+          onDelete: () async {},
           preview: true,
         ),
       ),
@@ -266,6 +267,62 @@ void main() {
     expect(find.text('風景'), findsOneWidget);
     expect(find.text('ファンタジー'), findsOneWidget);
     expect(find.textContaining('掲載終了まであと3日'), findsOneWidget);
+  });
+
+  testWidgets('確認後だけアイデア削除を実行する', (tester) async {
+    var deleted = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => IdeaDetailScreen(
+                      idea: IdeaSlotData(
+                        ideaId: 'preview-idea',
+                        title: '夜明けを待つ庭',
+                        expiresAt: DateTime.now().add(const Duration(days: 3)),
+                        previewDescription: '青い花が咲く庭。',
+                      ),
+                      apiBaseUrl: 'http://localhost:8080',
+                      authenticated: false,
+                      onDelete: () async => deleted = true,
+                      preview: true,
+                    ),
+                  ),
+                ),
+                child: const Text('詳細を開く'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('詳細を開く'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('idea-delete-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('idea-delete-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('アイデアを削除しますか？'), findsOneWidget);
+    expect(deleted, isFalse);
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
+    expect(deleted, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('idea-delete-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('idea-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(deleted, isTrue);
+    expect(find.text('詳細を開く'), findsOneWidget);
   });
 
   testWidgets('ページ境界で回転が隣のカードへ連続して移る', (tester) async {

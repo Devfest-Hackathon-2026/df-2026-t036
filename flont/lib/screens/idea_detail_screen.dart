@@ -28,12 +28,14 @@ class IdeaDetailScreen extends StatefulWidget {
     required this.idea,
     required this.apiBaseUrl,
     required this.authenticated,
+    required this.onDelete,
     this.preview = false,
   });
 
   final IdeaSlotData idea;
   final String apiBaseUrl;
   final bool authenticated;
+  final Future<void> Function() onDelete;
   final bool preview;
 
   @override
@@ -46,6 +48,7 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
   List<String> _tags = const [];
   late DateTime _publishedUntil = widget.idea.expiresAt;
   bool _loading = true;
+  bool _deleting = false;
   String? _error;
 
   @override
@@ -138,6 +141,49 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
     return '掲載終了まであと${remaining.inMinutes}分';
   }
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('アイデアを削除しますか？'),
+        content: const Text(
+          'タイムライン掲載と新規受付を停止し、ピンを無効にします。'
+          'すでに届いた作品は送信から7日間保持されます。削除は取り消せません。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            key: const ValueKey('idea-delete-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      await widget.onDelete();
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _deleting = false;
+          _error = error is StateError
+              ? error.message.toString()
+              : 'アイデアを削除できませんでした。再試行してください。';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -199,6 +245,21 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
                   children: [for (final tag in _tags) Chip(label: Text(tag))],
                 ),
               ],
+              const SizedBox(height: 28),
+              OutlinedButton.icon(
+                key: const ValueKey('idea-delete-button'),
+                onPressed: _deleting ? null : _confirmDelete,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                icon: _deleting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
+                label: Text(_deleting ? '削除中…' : 'アイデアを削除'),
+              ),
             ],
           ),
         ),
