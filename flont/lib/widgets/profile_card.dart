@@ -1,4 +1,3 @@
-
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -90,12 +89,9 @@ class _ProfileCardState extends State<ProfileCard>
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      elevation: 6,
+      // 色・枠線・角丸は全画面共通のCardThemeを使用する。
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

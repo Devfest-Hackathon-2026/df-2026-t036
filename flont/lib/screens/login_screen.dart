@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// 新規登録とログインの状態を表示する画面。
 class LoginScreen extends StatelessWidget {
@@ -18,13 +19,13 @@ class LoginScreen extends StatelessWidget {
   final String? error;
   final bool hasAccount;
 
-  static const _ink = Color(0xFF303650);
-  static const _accent = Color(0xFF6465AD);
+  static const _ink = AppColors.sub;
+  static const _accent = AppColors.sub;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7FC),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -84,7 +85,7 @@ class LoginScreen extends StatelessWidget {
                           'お題を見つけて、描いて、届ける。\nイラストでつながる、小さな創作の場所。',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Color(0xFF74768B),
+                            color: AppColors.muted,
                             fontSize: 14,
                             height: 1.9,
                           ),
@@ -94,9 +95,11 @@ class LoginScreen extends StatelessWidget {
                           width: double.infinity,
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFFE8E6F1)),
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.cardRadius,
+                            ),
+                            border: Border.all(color: AppColors.outline),
                           ),
                           child: Column(
                             children: [
@@ -113,7 +116,7 @@ class LoginScreen extends StatelessWidget {
                                 '初回は新規登録。登録済みの方は同じGoogleアカウントで。',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Color(0xFF74768B),
+                                  color: AppColors.muted,
                                   fontSize: 13,
                                 ),
                               ),
@@ -123,17 +126,7 @@ class LoginScreen extends StatelessWidget {
                                 child: FilledButton.icon(
                                   // 処理中は重複して認証を開始しない。
                                   onPressed: busy ? null : onSignIn,
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: _accent,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 18,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
+                                  // ボタンの色・形状は共通テーマから継承する。
                                   icon: const Icon(
                                     Icons.login_rounded,
                                     size: 20,
@@ -179,7 +172,7 @@ class LoginScreen extends StatelessWidget {
                                 'ログイン後は保存済みのプロフィールを表示します。',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Color(0xFF74768B),
+                                  color: AppColors.muted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -191,7 +184,7 @@ class LoginScreen extends StatelessWidget {
                                   Icon(
                                     Icons.shield_outlined,
                                     size: 16,
-                                    color: Color(0xFF8C8B9E),
+                                    color: AppColors.muted,
                                   ),
                                   SizedBox(width: 6),
                                   Flexible(
@@ -199,7 +192,7 @@ class LoginScreen extends StatelessWidget {
                                       '表示名は自動で作成されます。\nGoogleの本名は公開されません。',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: Color(0xFF8C8B9E),
+                                        color: AppColors.muted,
                                         fontSize: 11,
                                         height: 1.7,
                                       ),
@@ -215,7 +208,7 @@ class LoginScreen extends StatelessWidget {
                           'つづけることで、利用規約と\nプライバシーポリシーに同意したものとします。',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Color(0xFF8C8B9E),
+                            color: AppColors.muted,
                             fontSize: 11,
                             height: 1.8,
                           ),
@@ -225,7 +218,7 @@ class LoginScreen extends StatelessWidget {
                           'ひとつのお題から、あたらしいつながり。',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Color(0xFF8C8B9E),
+                            color: AppColors.muted,
                             fontSize: 11,
                           ),
                         ),
@@ -264,10 +257,10 @@ class _ExchangeArtwork extends StatelessWidget {
                   child: Transform.rotate(
                     angle: -0.13,
                     child: _card(
-                      const Color(0xFFEBE8FA),
+                      AppColors.main,
                       Icons.lightbulb_outline_rounded,
                       '小さなひらめき',
-                      const Color(0xFF7771B8),
+                      AppColors.sub,
                     ),
                   ),
                 ),
@@ -277,10 +270,10 @@ class _ExchangeArtwork extends StatelessWidget {
                   child: Transform.rotate(
                     angle: 0.12,
                     child: _card(
-                      const Color(0xFFFBE8DF),
+                      AppColors.main,
                       Icons.palette_outlined,
                       'あなたの一枚',
-                      const Color(0xFFC18369),
+                      AppColors.sub,
                     ),
                   ),
                 ),
@@ -288,7 +281,7 @@ class _ExchangeArtwork extends StatelessWidget {
                   top: 69,
                   child: CircleAvatar(
                     radius: 22,
-                    backgroundColor: Colors.white,
+                    backgroundColor: AppColors.surface,
                     child: Icon(
                       Icons.swap_horiz_rounded,
                       color: LoginScreen._accent,
@@ -313,11 +306,11 @@ class _ExchangeArtwork extends StatelessWidget {
       width: 126,
       height: 132,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0D303650),
+            color: AppColors.shadow,
             blurRadius: 20,
             offset: Offset(0, 8),
           ),
