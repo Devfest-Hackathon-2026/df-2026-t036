@@ -17,6 +17,12 @@ Authへの登録とFirestore登録は別処理です。途中の通信断でAuth
 firebase deploy --only firestore:rules --project YOUR_PROJECT_ID
 ```
 
+お題TL・本人のお題履歴で使う複合インデックスも、次で反映します。
+
+```powershell
+firebase deploy --only firestore:indexes --project YOUR_PROJECT_ID
+```
+
 `firestore.rules` は全クライアントの直接読み書きを拒否します。Admin SDKの認可はFastAPIが担当します。この作業でCloud Storageの作成・画像機能はまだ必要ありません。
 
 ## ローカルAPI

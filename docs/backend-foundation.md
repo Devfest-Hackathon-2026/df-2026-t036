@@ -15,6 +15,7 @@
 | `schemas.py` | 厳密な入力、前後空白の除去、ページング契約 |
 | `clock.py` | UTC時刻、RFC 3339のZ表記、期限境界 |
 | `users.py` | ユーザー登録と本人情報API |
+| `ideas.py` | お題・スロット・ピンのAPI、認可、Firestoreトランザクション |
 
 ## 設定
 
