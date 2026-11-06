@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'screens/main_screen.dart';
+import 'config/app_config.dart';
 import 'screens/login_screen.dart';
 
 /// GoogleログインとAPI側の登録が両方成功してからメイン画面を表示する。
@@ -21,6 +22,10 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<User?>? _subscription;
   FirebaseAuth? _auth;
+  String _apiBaseUrl = const String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8080',
+  );
   Map<String, dynamic>? _me;
   String? _error;
   bool _busy = true;
@@ -35,31 +40,11 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _initialize() async {
     try {
-      // Webの公開設定をビルド時に渡し、サービスアカウント鍵は使用しない。
+      // Webでは引数なしのflutter runでもローカルの公開設定を読み込む。
       if (kIsWeb) {
-        const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
-        const appId = String.fromEnvironment('FIREBASE_APP_ID');
-        const senderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
-        const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
-        const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
-        if ([
-          apiKey,
-          appId,
-          senderId,
-          projectId,
-          authDomain,
-        ].any((v) => v.isEmpty)) {
-          throw StateError('ログインの接続設定が完了していません。');
-        }
-        await Firebase.initializeApp(
-          options: const FirebaseOptions(
-            apiKey: apiKey,
-            appId: appId,
-            messagingSenderId: senderId,
-            projectId: projectId,
-            authDomain: authDomain,
-          ),
-        );
+        final config = await AppConfig.load();
+        _apiBaseUrl = config.apiBaseUrl;
+        await Firebase.initializeApp(options: config.firebaseOptions);
       } else {
         await Firebase.initializeApp();
       }
@@ -93,10 +78,7 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final token = await user.getIdToken();
       if (token == null) throw StateError('認証情報を取得できませんでした。');
-      const base = String.fromEnvironment(
-        'API_BASE_URL',
-        defaultValue: 'http://localhost:8080',
-      );
+      final base = _apiBaseUrl;
       final response = await http
           .post(
             Uri.parse(

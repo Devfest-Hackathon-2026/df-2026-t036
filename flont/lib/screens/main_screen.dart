@@ -30,7 +30,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Illustration Exchange'),
+        title: const Text('EOCURU'),
         centerTitle: true,
       ),
       body: IndexedStack(index: _selectedIndex, children: _pages),

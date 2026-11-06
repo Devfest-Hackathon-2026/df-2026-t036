@@ -10,6 +10,8 @@ class Settings:
 
     project_id: str | None = None
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
+    # 明示的に許可した開発環境だけ、Flutterの可変ローカルポートを受け付ける。
+    cors_allow_localhost: bool = False
     maintenance_mode: bool = False
     retry_after_seconds: int = 30
 
@@ -19,6 +21,9 @@ class Settings:
         maintenance = os.getenv("MAINTENANCE_MODE", "false").strip().lower()
         if maintenance not in {"true", "false"}:
             raise ValueError("MAINTENANCE_MODE must be true or false")
+        local_cors = os.getenv('CORS_ALLOW_LOCALHOST', 'false').strip().lower()
+        if local_cors not in {'true', 'false'}:
+            raise ValueError('CORS_ALLOW_LOCALHOST must be true or false')
         retry = int(os.getenv("RETRY_AFTER_SECONDS", "30"))
         if retry < 1:
             raise ValueError("RETRY_AFTER_SECONDS must be positive")
@@ -32,6 +37,7 @@ class Settings:
         return cls(
             project_id=os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() or None,
             cors_origins=origins,
+            cors_allow_localhost=local_cors == 'true',
             maintenance_mode=maintenance == "true",
             retry_after_seconds=retry,
         )

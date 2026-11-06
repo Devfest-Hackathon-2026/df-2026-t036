@@ -25,7 +25,9 @@ ADCを設定します。ローカル開発ではFirestoreを操作できる開�
 
 ```powershell
 gcloud auth application-default login
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 $env:GOOGLE_CLOUD_PROJECT = 'YOUR_PROJECT_ID'
+$env:CORS_ALLOW_LOCALHOST = 'true'
 ./back/.venv/Scripts/python.exe -m pip install -r back/requirements-dev.txt
 cd back
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8080
@@ -40,12 +42,14 @@ ADC設定を変更したらAPIを再起動します。サービスアカウン�
 ```powershell
 cd flont
 flutter pub get
-flutter run -d chrome --web-hostname localhost --web-port 3000 --dart-define-from-file=firebase-config.local.json
+flutter run -d chrome
 ```
 
 Googleログイン後、登録完了でメイン画面へ進みます。マイページにはランダム表示名と初期値0の累計が表示されます。ページを再読み込みしても同じ名前が維持されます。ログイン後にAPI接続だけ失敗した場合は「ユーザー登録を再試行」を押します。
 
 今回の実行・検証対象はWebです。Android/iOSでは各アプリをFirebaseに登録し、プラットフォームのFirebase設定を追加してください。GoogleプロバイダーのSHAフィンガープリントやURLスキームなども公式手順に従って設定する必要があります。
+
+引数なしの自動読み込み、通常起動と開発プレビューの切り替え、APIの起動方法は [Flutter起動手順](../../flont/README.md) にまとめています。Web設定JSONはアプリへ同梱される公開設定です。起動引数を指定した項目はJSONより優先されます。
 
 ## 確認する内容
 

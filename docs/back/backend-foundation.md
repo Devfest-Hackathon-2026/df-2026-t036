@@ -29,7 +29,7 @@ cd back
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8080
 ```
 
-`MAINTENANCE_MODE` はtrue/falseのみ、再試行秒数は正整数です。CORSはカンマ区切りの明示的なOriginを指定し、ワイルドカードは拒否します。認証付きPOSTと今後の削除・更新に対応しています。
+`MAINTENANCE_MODE` はtrue/falseのみ、再試行秒数は正整数です。CORSはカンマ区切りの明示的なOriginを指定し、ワイルドカードは拒否します。ローカル開発時だけ `CORS_ALLOW_LOCALHOST=true` を指定すると、HTTPのlocalhost・127.0.0.1の可変ポートも許可します。既定はfalseで、本番では有効にしません。認証付きPOSTと今後の削除・更新に対応しています。
 
 設定変更は再起動で反映します。Cloud Runでは同じ設定を持つリビジョンへ切り替え、旧リビジョンへトラフィックが残っていないことを確認します。ローカル環境変数はDockerへ自動で渡らないため、Compose利用時は別途environmentとADCの受け渡しが必要です。
 
