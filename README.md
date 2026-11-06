@@ -7,9 +7,9 @@
 
 ## 現在の実装範囲
 
-現在は開発用のひな形として、FlutterのAPI接続確認画面、FastAPIの `/health`、DockerによるAPI起動、基本テストを用意しています。
+Googleログイン、FastAPIでのIDトークン検証、Firestoreへの初回ユーザー登録、登録情報のマイページ表示を実装しています。接続には [Firebase認証の設定](docs/firebase-auth.md) が必要です。FastAPIの `/health`、DockerによるAPI起動、基本テストも用意しています。
 
-仕様上の目標構成は、Flutter WebをFirebase Hosting、FastAPIをCloud Runに配置し、Firebase Authentication・Cloud Firestore・Cloud Storage・Cloud Schedulerを組み合わせる構成です。これらのクラウド連携やGoogleログイン・アイデア・作品の機能はまだ実装していません。
+仕様上の目標構成は、Flutter WebをFirebase Hosting、FastAPIをCloud Runに配置し、Firebase Authentication・Cloud Firestore・Cloud Storage・Cloud Schedulerを組み合わせる構成です。お題・作品のAPIと画像処理、クラウドへのデプロイは未実施です。
 
 ## フォルダ構成
 

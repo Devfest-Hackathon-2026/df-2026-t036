@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../widgets/profile_card.dart';
 import 'idea_history_screen.dart';
@@ -6,7 +5,10 @@ import 'drawing_history_screen.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.me});
+
+  // ログインしたユーザーの名前と実際の累計を表示する。
+  final Map<String, dynamic>? me;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +25,7 @@ class ProfileScreen extends StatelessWidget {
                   'マイページ',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
+                // 本人情報の表示を維持し、設定画面への遷移も取り込む。
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   onPressed: () {
@@ -40,12 +43,12 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // プロフィールカード
-            const Center(
+            Center(
               child: ProfileCard(
-                nickname: 'サンプルユーザー',
-                ideaCount: 12,
-                drawingCount: 8,
-                likeCount: 24,
+                nickname: me?['nickname'] as String? ?? '未ログイン',
+                ideaCount: me?['ideaCount'] as int? ?? 0,
+                drawingCount: me?['drawnCount'] as int? ?? 0,
+                likeCount: me?['likesReceived'] as int? ?? 0,
               ),
             ),
 
@@ -56,16 +59,14 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 Icon(Icons.threed_rotation, size: 18),
                 SizedBox(width: 8),
-                Text('カードをタップして裏返す'),
+                // 狭い画面や大きな文字設定でも説明を折り返す。
+                Flexible(child: Text('カードをタップして裏返す')),
               ],
             ),
 
             const SizedBox(height: 32),
 
-            Text(
-              '創作の履歴',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('創作の履歴', style: Theme.of(context).textTheme.titleMedium),
 
             const SizedBox(height: 12),
 

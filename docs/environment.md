@@ -4,6 +4,8 @@ Flutter + FastAPI の開発用ひな形です。指定に合わせてフロン�
 
 ## 構成
 
+バックエンドの共通処理・環境変数・API追加時の規約は [FastAPI共通基盤](backend-foundation.md) を参照してください。
+
 ```text
 flont/         Flutter（Android・iOS・Web）、API接続確認画面
 back/          FastAPI、テスト、Cloud Run対応Dockerfile
@@ -82,6 +84,8 @@ cd back
 Docker版とPython版は同じポートを使用するため、一方のみ起動します。終了は `Ctrl+C` です。
 
 ## 5. Flutter Webを起動
+
+GoogleログインとFirestoreへの初回ユーザー登録には、先に [Firebase認証の設定手順](firebase-auth.md) を実施してください。認証設定後は、同手順の `--dart-define-from-file` 付きコマンドで起動します。
 
 別のターミナルを開き、リポジトリ直下から実行します。
 

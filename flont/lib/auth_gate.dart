@@ -1,0 +1,217 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import 'screens/main_screen.dart';
+
+/// GoogleログインとAPI側の登録が両方成功してからメイン画面を表示する。
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  StreamSubscription<User?>? _subscription;
+  FirebaseAuth? _auth;
+  Map<String, dynamic>? _me;
+  String? _error;
+  bool _busy = true;
+  bool _ready = false;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      // Webの公開設定をビルド時に渡し、サービスアカウント鍵は使用しない。
+      if (kIsWeb) {
+        const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
+        const appId = String.fromEnvironment('FIREBASE_APP_ID');
+        const senderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
+        const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
+        const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+        if ([
+          apiKey,
+          appId,
+          senderId,
+          projectId,
+          authDomain,
+        ].any((v) => v.isEmpty)) {
+          throw StateError('ログインの接続設定が完了していません。');
+        }
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: apiKey,
+            appId: appId,
+            messagingSenderId: senderId,
+            projectId: projectId,
+            authDomain: authDomain,
+          ),
+        );
+      } else {
+        await Firebase.initializeApp();
+      }
+      if (!mounted) return;
+      _auth = FirebaseAuth.instance;
+      _ready = true;
+      // 再読み込み時にも復元されたログイン状態で登録APIを再実行する。
+      _subscription = _auth!.authStateChanges().listen(_onUserChanged);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = error is StateError
+            ? error.message.toString()
+            : 'Firebaseを初期化できませんでした。設定を確認して再読み込みしてください。';
+      });
+    }
+  }
+
+  void _onUserChanged(User? user) {
+    final generation = ++_generation;
+    setState(() {
+      _me = null;
+      _error = null;
+      _busy = user != null;
+    });
+    if (user != null) _register(user, generation);
+  }
+
+  Future<void> _register(User user, int generation) async {
+    try {
+      final token = await user.getIdToken();
+      if (token == null) throw StateError('認証情報を取得できませんでした。');
+      const base = String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'http://localhost:8080',
+      );
+      final response = await http
+          .post(
+            Uri.parse(
+              '${base.replaceFirst(RegExp(r'/+$'), '')}/api/v1/users/register',
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        final body =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        throw StateError(
+          (body['error'] as Map<String, dynamic>)['message'] as String,
+        );
+      }
+      final me =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _me = me;
+        _busy = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _busy = false;
+        _error = error is StateError
+            ? error.message.toString()
+            : 'ユーザー登録に失敗しました。接続を確認して再試行してください。';
+      });
+    }
+  }
+
+  Future<void> _signIn() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final provider = GoogleAuthProvider();
+      if (kIsWeb) {
+        await _auth!.signInWithPopup(provider);
+      } else {
+        await _auth!.signInWithProvider(provider);
+      }
+      // 以降の登録は認証状態の通知から一度だけ開始する。
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = error.code == 'popup-closed-by-user'
+            ? 'ログインをキャンセルしました。'
+            : 'Googleログインに失敗しました。再試行してください。';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'ログインに失敗しました。再試行してください。';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_me != null) return MainScreen(me: _me);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Illustration Exchange')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Googleアカウントで始める', style: TextStyle(fontSize: 24)),
+                const SizedBox(height: 16),
+                const Text('表示名は登録時に自動で決まります。Googleの本名は表示しません。'),
+                const SizedBox(height: 24),
+                if (_busy) const CircularProgressIndicator(),
+                if (_error != null) ...[
+                  Text(_error!),
+                  const SizedBox(height: 16),
+                ],
+                if (!_busy && _ready)
+                  FilledButton(
+                    onPressed: () {
+                      final user = _auth!.currentUser;
+                      if (user == null) {
+                        _signIn();
+                      } else {
+                        _onUserChanged(user);
+                      }
+                    },
+                    child: Text(
+                      _auth!.currentUser == null ? 'Googleでログイン' : 'ユーザー登録を再試行',
+                    ),
+                  ),
+                if (!_busy && _ready && _auth!.currentUser != null)
+                  TextButton(
+                    onPressed: () => _auth!.signOut(),
+                    child: const Text('別のアカウントでログイン'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -6,7 +6,10 @@ import 'inbox_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  const MainScreen({super.key, this.me});
+
+  // 登録APIが返した本人情報をマイページへ渡す。
+  final Map<String, dynamic>? me;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -15,11 +18,11 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _pages = [
+  List<Widget> get _pages => [
     TimelineScreen(),
     IdeasScreen(),
     InboxScreen(),
-    ProfileScreen(),
+    ProfileScreen(me: widget.me),
   ];
 
   @override
@@ -29,10 +32,7 @@ class _MainScreenState extends State<MainScreen> {
         title: const Text('Illustration Exchange'),
         centerTitle: true,
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {

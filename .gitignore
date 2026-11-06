@@ -1,5 +1,6 @@
 # ローカル環境や認証情報は共有しない。
 .env
+/flont/firebase-config.local.json
 .env.*
 !.env.example
 .venv/
