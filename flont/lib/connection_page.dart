@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'theme/app_theme.dart';
 
 // 接続先はビルド時に指定し、環境ごとのコード変更を不要にする。
 const apiBaseUrl = String.fromEnvironment(
@@ -16,8 +17,9 @@ class IllustrationExchangeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Illustration Exchange',
-      theme: ThemeData(colorSchemeSeed: Colors.indigo),
+      title: 'EOCURU',
+      // 接続確認画面を単独起動しても同じテーマを使用する。
+      theme: AppTheme.light,
       home: const ConnectionPage(),
     );
   }
@@ -62,7 +64,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Illustration Exchange')),
+      appBar: AppBar(title: const Text('EOCURU')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

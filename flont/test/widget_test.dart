@@ -108,7 +108,7 @@ void main() {
     await tester.pumpWidget(const IllustrationExchangeApp(home: MainScreen()));
 
     // 上部のアプリ名を確認
-    expect(find.text('Illustration Exchange'), findsOneWidget);
+    expect(find.text('EOCURU'), findsOneWidget);
 
     // 下部の4つのナビゲーションを確認
     expect(find.text('タイムライン'), findsOneWidget);
