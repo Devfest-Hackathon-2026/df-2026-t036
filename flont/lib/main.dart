@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
 import 'auth_gate.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'theme/app_theme.dart';
 
 const _developmentPreview = bool.fromEnvironment('DEV_PREVIEW');
 
@@ -18,18 +18,13 @@ class IllustrationExchangeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = ThemeData(
-      useMaterial3: true,
-      colorSchemeSeed: Colors.indigo,
-    );
+    // 共通テーマをルートで設定し、遷移先の画面にも継承する。
     return MaterialApp(
-      title: 'Illustration Exchange',
+      // アプリ切替やブラウザで使用する表示名。
+      title: 'EOCURU',
       debugShowCheckedModeBanner: false,
-      theme: baseTheme.copyWith(
-        textTheme: baseTheme.textTheme.apply(
-          fontFamily: GoogleFonts.mPlusRounded1c().fontFamily,
-        ),
-      ),
+      theme: AppTheme.light,
+      // 開発プレビューはデバッグ時だけ有効にし、通常は認証画面から開始する。
       home:
           home ??
           (kDebugMode && _developmentPreview

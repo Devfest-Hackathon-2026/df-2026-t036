@@ -85,18 +85,10 @@ Docker版とPython版は同じポートを使用するため、一方のみ起�
 
 ## 5. Flutter Webを起動
 
-GoogleログインとFirestoreへの初回ユーザー登録には、先に [Firebase認証の設定手順](back/firebase-auth.md) を実施してください。認証設定後は、同手順の `--dart-define-from-file` 付きコマンドで起動します。
+通常のGoogleログイン・DB接続と、認証なしのデザインプレビューは [Flutter起動手順](../flont/README.md) にまとめています。初回のFirebase・ADC設定は [Firebase認証の設定手順](back/firebase-auth.md) を参照してください。
+GoogleログインとFirestoreへの初回ユーザー登録には、先に [Firebase認証の設定手順](back/firebase-auth.md) を実施し、同手順の `--dart-define-from-file` 付きコマンドで起動します。
 
-別のターミナルを開き、リポジトリ直下から実行します。
-
-```powershell
-cd flont
-flutter pub get
-flutter run -d chrome --web-hostname localhost --web-port 3000 --dart-define=API_BASE_URL=http://localhost:8080
-```
-
-画面の「API接続確認」を押し、「API接続成功」が表示されれば疎通成功です。
-APIのCORS許可元はデフォルトで `http://localhost:3000` です。ホスト名やポートを変更する場合はAPIの `CORS_ORIGINS` 環境変数も変更して再起動します。複数の許可元はカンマ区切りです。Compose使用時は `compose.yaml` の値を変更します。
+`flont/firebase-config.local.json` を用意すれば、Chromeを選んで `flutter run` だけで設定を読み込めます。通常利用にはAPIも必要です。Flutterの可変ポートを使う場合は、API起動前に開発環境限定で `CORS_ALLOW_LOCALHOST=true` を設定してください。設定例・固定ポートでの起動・停止・エラー対処もFlutter起動手順に記載しています。
 
 ## 6. モバイルで起動
 

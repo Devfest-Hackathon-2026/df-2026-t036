@@ -21,6 +21,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
+        # 外部ホストへは広げず、開発時にだけループバックの可変ポートを許可する。
+        allow_origin_regex=(r"http://(localhost|127\.0\.0\.1):[0-9]+"
+                            if settings.cors_allow_localhost else None),
         allow_methods=["GET", "POST", "DELETE", "PATCH", "PUT"],
         allow_headers=["Authorization", "Content-Type"],
         expose_headers=["X-Request-Id", "Retry-After"],
