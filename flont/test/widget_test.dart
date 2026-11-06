@@ -8,16 +8,12 @@ import 'package:illustration_exchange/screens/settings_screen.dart';
 import 'package:illustration_exchange/widgets/profile_card.dart';
 
 void main() {
-  testWidgets(
-    'debugプレビューで認証なしにメイン画面を表示する',
-    (tester) async {
-      await tester.pumpWidget(const IllustrationExchangeApp());
+  testWidgets('debugプレビューで認証なしにメイン画面を表示する', (tester) async {
+    await tester.pumpWidget(const IllustrationExchangeApp());
 
-      expect(find.byType(MainScreen), findsOneWidget);
-      expect(find.text('タイムライン'), findsOneWidget);
-    },
-    skip: !const bool.fromEnvironment('DEV_PREVIEW'),
-  );
+    expect(find.byType(MainScreen), findsOneWidget);
+    expect(find.text('タイムライン'), findsOneWidget);
+  }, skip: !const bool.fromEnvironment('DEV_PREVIEW'));
 
   testWidgets('設定に表示名とGoogleアカウントを表示し対象外項目を出さない', (tester) async {
     await tester.pumpWidget(
@@ -38,6 +34,27 @@ void main() {
     expect(find.text('お問い合わせ'), findsOneWidget);
     expect(find.text('ニックネーム変更'), findsNothing);
     expect(find.text('退会'), findsNothing);
+  });
+
+  testWidgets('ログアウトをキャンセルすると設定画面に戻る', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SettingsScreen(
+          nickname: 'そらのえふで1234',
+          googleEmail: 'artist@example.com',
+        ),
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(ListTile, 'ログアウト'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ログアウトしますか？'), findsOneWidget);
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('設定'), findsOneWidget);
+    expect(find.text('そらのえふで1234'), findsOneWidget);
   });
 
   testWidgets('受信箱の空状態を表示する', (tester) async {
