@@ -5,7 +5,7 @@ services:
       - "8080:8080"
     # ローカル設定を起動時に渡し、イメージには保存しない。
     env_file:
-      - ./back/.local.env
+      - ./back/.env
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 10s
