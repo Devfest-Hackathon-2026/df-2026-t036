@@ -18,6 +18,7 @@ __pycache__/
 /flont/.dart_tool/
 /flont/build/
 /flont/android/local.properties
+/back/.local.env
 
 # IDEが生成するプロジェクトファイルは配置場所を問わず除外する。
 *.iml

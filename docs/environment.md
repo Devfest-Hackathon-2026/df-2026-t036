@@ -47,6 +47,9 @@ cd ./-Illustration-exchange
 
 ## 3. APIをDockerで起動（推奨）
 
+初回は ack/.env.example を ack/.local.env へコピーし、プロジェクトIDなどを設定してください。既存ファイルは上書きしません。Composeが起動時に自動読込し、イメージには同梱しません。設定変更後は docker compose up -d --force-recreate で反映します。Google Cloudの認証情報はenvとは別に渡す必要があり、ADCの受け渡しは [Firebase設定](back/firebase-auth.md) を参照してください。
+
+
 ```powershell
 docker compose up --build -d
 docker compose ps
@@ -165,3 +168,9 @@ gcloud run services describe $Service --region $Region --format="value(status.ur
 - Webビルド時に未使用のCupertinoIconsフォントに関する警告が出るが、ビルドは成功。
 - Android/iOSのビルド、実機確認、Cloud Runへのデプロイは未実施。
 - Gitのoriginは指定のGitHub URLに設定済み。コミット・pushは未実施。
+
+## APIとFlutterの設定の分離
+
+APIは `back/.local.env` または環境変数から設定を取得します。環境変数が優先されます。`GOOGLE_CLOUD_PROJECT` には利用するFirebaseプロジェクトIDを明示してください。
+
+Flutterは `flont/firebase-config.local.json` を使用します。APIはこのJSONを読み込まず、Composeでも共有しません。同じFirebaseプロジェクトを利用する場合は、両方に同じプロジェクトIDをそれぞれ設定してください。APIのenv自動読み込みとComposeの `env_file` は引き続き利用できます。
