@@ -47,6 +47,16 @@ class _InboxScreenState extends State<InboxScreen> {
     });
   }
 
+  Widget _fitCard(Widget child) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth >= 240) return child;
+      return FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox(width: 240, height: 320, child: child),
+      );
+    },
+  );
+
   Widget _buildCarousel(List<String> titles) {
     return Listener(
       key: _gestureKey,
@@ -75,6 +85,7 @@ class _InboxScreenState extends State<InboxScreen> {
               },
             ),
             child: PageView.builder(
+              clipBehavior: Clip.none,
               controller: _controller,
               physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
               itemCount: titles.length,
@@ -92,12 +103,14 @@ class _InboxScreenState extends State<InboxScreen> {
                     rotationX: _rotationX * weight,
                     rotationY: -offset * 0.16,
                     isDragging: (_pointer != null || moving) && weight > 0,
-                    child: IdeaSlotCard(
-                      slotNumber: index + 1,
-                      label: '受信作品 ${index + 1}',
-                      title: titles[index],
-                      subtitle: '届いたイラスト',
-                      icon: Icons.image_outlined,
+                    child: _fitCard(
+                      IdeaSlotCard(
+                        slotNumber: index + 1,
+                        label: '受信作品 ${index + 1}',
+                        title: titles[index],
+                        subtitle: '届いたイラスト',
+                        icon: Icons.image_outlined,
+                      ),
                     ),
                   ),
                 );
@@ -153,61 +166,84 @@ class _InboxScreenState extends State<InboxScreen> {
             child: ConstrainedBox(
               // 外側の余白も含めた全体幅を他の画面にそろえる。
               constraints: BoxConstraints(maxWidth: layout.contentWidth),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('受信箱', style: Theme.of(context).textTheme.headlineSmall),
-                  SizedBox(height: headingGap),
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: layout.contentWidth,
-                      ),
-                      // 幅に合わせて高さを決め、横3・縦4を維持する。
-                      child: AspectRatio(
-                        aspectRatio: 3 / 4,
-                        child: titles.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 0,
-                                  vertical: 0,
-                                ),
-                                child: IdeaSlotCard(
-                                  slotNumber: 1,
-                                  label: '受信作品',
-                                  emptyText: 'まだ作品は届いていません',
-                                  emptyIcon: Icons.inbox_outlined,
-                                ),
-                              )
-                            : _buildCarousel(titles),
+              child: SizedBox(
+                height: (constraints.maxHeight - layout.insets.vertical).clamp(
+                  240.0,
+                  double.infinity,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '受信箱',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    SizedBox(height: headingGap),
+                    Expanded(
+                      child: ClipRect(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 32,
+                          ),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: layout.contentWidth,
+                              ),
+                              // 幅に合わせて高さを決め、横3・縦4を維持する。
+                              child: AspectRatio(
+                                aspectRatio: 3 / 4,
+                                child: titles.isEmpty
+                                    ? _fitCard(
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 0,
+                                            vertical: 0,
+                                          ),
+                                          child: IdeaSlotCard(
+                                            slotNumber: 1,
+                                            label: '受信作品',
+                                            emptyText: 'まだ作品は届いていません',
+                                            emptyIcon: Icons.inbox_outlined,
+                                          ),
+                                        ),
+                                      )
+                                    : _buildCarousel(titles),
+                              ),
+                            ),
+                          ),
+                          // 一作品の場合は切り替え操作を表示しない。
+                        ),
                       ),
                     ),
-                  ),
-                  // 一作品の場合は切り替え操作を表示しない。
-                  if (titles.length > 1) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton.filledTonal(
-                          tooltip: '前の作品',
-                          onPressed: _page == 0 ? null : () => _move(_page - 1),
-                          icon: const Icon(Icons.chevron_left),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Text('${_page + 1} / ${titles.length}'),
-                        ),
-                        IconButton.filledTonal(
-                          tooltip: '次の作品',
-                          onPressed: _page == titles.length - 1
-                              ? null
-                              : () => _move(_page + 1),
-                          icon: const Icon(Icons.chevron_right),
-                        ),
-                      ],
-                    ),
+                    if (titles.length > 1) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton.filledTonal(
+                            tooltip: '前の作品',
+                            onPressed: _page == 0
+                                ? null
+                                : () => _move(_page - 1),
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Text('${_page + 1} / ${titles.length}'),
+                          ),
+                          IconButton.filledTonal(
+                            tooltip: '次の作品',
+                            onPressed: _page == titles.length - 1
+                                ? null
+                                : () => _move(_page + 1),
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
