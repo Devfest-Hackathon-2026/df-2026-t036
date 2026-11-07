@@ -78,6 +78,8 @@ void main() {
     expect(find.text('ログアウト'), findsOneWidget);
     expect(find.text('利用規約'), findsOneWidget);
     expect(find.text('プライバシーポリシー'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('お問い合わせ'), 200);
+    await tester.pumpAndSettle();
     expect(find.text('お問い合わせ'), findsOneWidget);
     expect(find.text('ニックネーム変更'), findsNothing);
     expect(find.text('退会'), findsNothing);
