@@ -12,7 +12,7 @@ import 'package:illustration_exchange/screens/vision_demo_screen.dart';
 // 小さなPNGを使い、画像プレビューも実際に描画する。
 XFile image([String name = 'sample.png']) {
   final bytes = base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAFElEQVR4nGMU0bBhwAaYsIrSSQIASVIAhA+B2TgAAAAASUVORK5CYII=',
   );
   return XFile.fromData(bytes, name: name, path: name);
 }
@@ -43,11 +43,19 @@ class OversizedImage extends XFile {
   }
 }
 
+// ネイティブ画像変換の完了を待ち、実際の変換結果で画面を検証する。
+Future<void> chooseImage(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await tester.tap(find.text('画像を選択'));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  });
+}
+
 void main() {
   testWidgets('容量超過の画像はデータ読み込み前に拒否する', (tester) async {
     final file = OversizedImage();
     await tester.pumpWidget(screen(() async => file));
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     expect(find.text('画像は20MB以下のものを選んでください。'), findsOneWidget);
     expect(file.readRequested, isFalse);
@@ -59,10 +67,10 @@ void main() {
     await tester.pumpWidget(
       screen(() async => attempts++ == 0 ? null : image()),
     );
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     expect(find.text('判定する'), findsNothing);
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     expect(find.text('sample.png'), findsOneWidget);
   });
@@ -70,7 +78,7 @@ void main() {
   testWidgets('画像選択中に画面を破棄しても状態更新しない', (tester) async {
     final selection = Completer<XFile?>();
     await tester.pumpWidget(screen(() => selection.future));
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpWidget(const SizedBox());
     selection.complete(image());
     await tester.pump();
@@ -85,10 +93,10 @@ void main() {
         return image();
       }),
     );
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     expect(find.text('画像を選択できませんでした。もう一度お試しください。'), findsOneWidget);
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     expect(find.text('sample.png'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -96,7 +104,7 @@ void main() {
 
   testWidgets('選択フィルターを通り抜けたWebPも拒否する', (tester) async {
     await tester.pumpWidget(screen(() async => image('sample.webp')));
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     expect(find.text('JPEG、PNG、HEIC/HEIFの画像を選んでください。'), findsOneWidget);
     expect(find.text('判定する'), findsNothing);
@@ -115,7 +123,7 @@ void main() {
       return http.StreamedResponse(body.stream, 200);
     });
     await tester.pumpWidget(screen(() async => image(), client: client));
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.text('判定する'));
     await tester.pump();
@@ -132,7 +140,7 @@ void main() {
     final response = Completer<http.Response>();
     final client = MockClient((_) => response.future);
     await tester.pumpWidget(screen(() async => image(), client: client));
-    await tester.tap(find.text('画像を選択'));
+    await chooseImage(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.text('判定する'));
     await tester.pump();

@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../services/vision_image_processing.dart';
+
 class VisionDemoScreen extends StatefulWidget {
   const VisionDemoScreen({
     super.key,
@@ -94,9 +96,22 @@ class _VisionDemoScreenState extends State<VisionDemoScreen> {
       if (bytes.length > _maxImageBytes) {
         throw StateError('画像は20MB以下のものを選んでください。');
       }
+      Uint8List prepared;
+      try {
+        prepared = await prepareVisionImage(bytes);
+      } on StateError {
+        rethrow;
+      } catch (_) {
+        throw StateError('この画像を変換できません。対応するJPEGまたはPNGを選んでください。');
+      }
+      if (!mounted) return;
+      if (prepared.length > _maxImageBytes) {
+        throw StateError('変換後の画像が20MBを超えました。小さい画像を選んでください。');
+      }
       setState(() {
-        _imageBytes = bytes;
-        _fileName = file.name;
+        _imageBytes = prepared;
+        // 送信ファイル名も、変換後の実形式へ合わせる。
+        _fileName = '${file.name.substring(0, file.name.lastIndexOf('.'))}.png';
         _categories = null;
         _error = null;
       });

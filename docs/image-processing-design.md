@@ -1,5 +1,7 @@
 # 作品画像処理・通信設計書
 
+> 現行デモの変更: Flutterで事前変換し、FastAPIで再検証後、画像バイト列をVisionへ直接送信する。Vision用の一時Storage保存は廃止した。以下の一時保存を用いた記述・図は従来の設計案であり、通常投稿の正式保存はまだ未接続。現行手順は [Visionデモ](back/vision-web-demo.md) を参照。
+
 - 対象: M1のイラスト投稿
 - 方針: Flutterでアップロード前圧縮し、FastAPIで最終検証・WebP変換・不適切画像判定を行う
 - 関連資料: [総合仕様書](specification.md)、[DB・API仕様書](database/DB_v0.md)

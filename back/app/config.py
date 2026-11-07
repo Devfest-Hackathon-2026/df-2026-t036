@@ -24,7 +24,6 @@ class Settings:
     # 内部処理は専用サービスアカウントと明示したOIDC audienceだけに許可する。
     cleanup_service_account: str | None = None
     cleanup_audience: str | None = None
-    vision_demo_bucket: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -59,5 +58,4 @@ class Settings:
             retry_after_seconds=retry,
             cleanup_service_account=cleanup_account,
             cleanup_audience=cleanup_audience,
-            vision_demo_bucket=(values.get("VISION_DEMO_BUCKET") or "").strip() or None,
         )

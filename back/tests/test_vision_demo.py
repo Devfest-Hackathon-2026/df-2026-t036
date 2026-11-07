@@ -25,12 +25,9 @@ def test_normalization_runs_outside_event_loop(monkeypatch):
             raise ImageProcessingError("INVALID_IMAGE", "invalid image")
 
         monkeypatch.setattr(vision_demo, "normalize_image", reject_image)
-        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
-            settings=Settings(vision_demo_bucket="demo-bucket")
-        )))
         with pytest.raises(ApiError) as error:
             await vision_demo.inspect_image(
-                request, {"uid": "viewer"}, UploadFile(BytesIO(b"invalid"))
+                {"uid": "viewer"}, UploadFile(BytesIO(b"invalid"))
             )
         assert error.value.status == 422
         assert worker_threads and worker_threads[0] != loop_thread
@@ -73,14 +70,14 @@ def upload_request(app, body, *, content_length=None):
 
 
 @pytest.mark.parametrize("declared", [None, 1, 4096, "9" * 5000])
-def test_receive_limit_stops_before_storage(monkeypatch, declared):
+def test_receive_limit_stops_before_vision_client_factory(monkeypatch, declared):
     from unittest.mock import Mock
     from app import middleware
     from app.main import create_app
 
     monkeypatch.setattr(middleware, "MAX_DEMO_REQUEST_BYTES", 1024)
-    storage = Mock()
-    monkeypatch.setattr(vision_demo.storage, "Client", storage)
+    vision_client_factory = Mock()
+    monkeypatch.setattr(vision_demo.vision, "ImageAnnotatorClient", vision_client_factory)
     body = (b'--test\r\nContent-Disposition: form-data; name="file"; filename="large.png"\r\n'
             b'Content-Type: image/png\r\n\r\n' + b'x' * 2048 + b'\r\n--test--\r\n')
     start, payload, reads, total = upload_request(create_app(Settings()), body, content_length=declared)
@@ -91,40 +88,38 @@ def test_receive_limit_stops_before_storage(monkeypatch, declared):
     assert reads < total
     if declared == 4096:
         assert reads == 0
-    storage.assert_not_called()
+    vision_client_factory.assert_not_called()
 
 
-def test_invalid_image_does_not_reach_storage(monkeypatch):
+def test_invalid_image_does_not_reach_vision_client_factory(monkeypatch):
     from unittest.mock import Mock
     from fastapi.testclient import TestClient
     from app.auth import active_user
     from app.main import create_app
 
-    app = create_app(Settings(vision_demo_bucket="demo-bucket"))
+    app = create_app(Settings())
     app.dependency_overrides[active_user] = lambda: {"uid": "viewer"}
-    storage = Mock()
-    monkeypatch.setattr(vision_demo.storage, "Client", storage)
+    vision_client_factory = Mock()
+    monkeypatch.setattr(vision_demo.vision, "ImageAnnotatorClient", vision_client_factory)
     with TestClient(app) as client:
         response = client.post('/api/v1/vision-demo', files={"file": ("fake.png", b"not an image", "image/png")})
     assert response.status_code == 422
-    storage.assert_not_called()
+    vision_client_factory.assert_not_called()
 
 
 @pytest.mark.parametrize("file_limit,expected", [(1, 413), (20 * 1024 * 1024, 200)])
-def test_file_validation_before_cloud_upload(monkeypatch, file_limit, expected):
+def test_file_validation_before_vision(monkeypatch, file_limit, expected):
     from unittest.mock import Mock
     from PIL import Image
     from fastapi.testclient import TestClient
     from app.auth import active_user
     from app.main import create_app
 
-    # 正常画像は保存へ進み、ファイル自体が容量超過なら保存前に止める。
+    # 正常画像だけVisionへ直接渡し、容量超過なら呼出前に止める。
     image = BytesIO()
     Image.new("RGB", (8, 6)).save(image, format="PNG")
-    app = create_app(Settings(vision_demo_bucket="demo-bucket"))
+    app = create_app(Settings())
     app.dependency_overrides[active_user] = lambda: {"uid": "viewer"}
-    storage = Mock()
-    monkeypatch.setattr(vision_demo.storage, "Client", storage)
     monkeypatch.setattr(vision_demo, "MAX_DEMO_UPLOAD_BYTES", file_limit)
     annotation = vision_demo.vision.SafeSearchAnnotation(adult=1, spoof=1, medical=1, violence=1, racy=1)
     vision = Mock()
@@ -138,9 +133,30 @@ def test_file_validation_before_cloud_upload(monkeypatch, file_limit, expected):
         response = client.post('/api/v1/vision-demo', files={"file": ("sample.png", image.getvalue(), "image/png")})
     assert response.status_code == expected
     if expected == 413:
-        storage.assert_not_called()
+        vision.safe_search_detection.assert_not_called()
     else:
-        blob = storage.return_value.bucket.return_value.blob.return_value
-        blob.upload_from_string.assert_called_once()
-        blob.delete.assert_called_once()
+        sent = vision.safe_search_detection.call_args.kwargs['image']
+        assert sent.content
+        assert not sent.source.image_uri
+        with Image.open(BytesIO(sent.content)) as processed:
+            assert processed.format == 'JPEG'
         assert response.json()["width"] == 8
+
+
+def test_inline_limit_rejects_before_vision(monkeypatch):
+    from unittest.mock import Mock
+    from fastapi.testclient import TestClient
+    from app.auth import active_user
+    from app.main import create_app
+
+    # 変換後が直接送信の上限を超えた場合、VisionもStorageも呼び出さない。
+    factory = Mock()
+    monkeypatch.setattr(vision_demo.vision, "ImageAnnotatorClient", factory)
+    monkeypatch.setattr(vision_demo, "MAX_INLINE_IMAGE_BYTES", 3)
+    monkeypatch.setattr(vision_demo, "normalize_image", lambda raw: SimpleNamespace(data=b"1234"))
+    app = create_app(Settings())
+    app.dependency_overrides[active_user] = lambda: {"uid": "viewer"}
+    with TestClient(app) as client:
+        response = client.post('/api/v1/vision-demo', files={"file": ("image.png", b"input", "image/png")})
+    assert response.status_code == 413
+    factory.assert_not_called()
