@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'terms_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.nickname, this.googleEmail});
@@ -89,6 +90,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.description_outlined),
             title: const Text('利用規約'),
+            trailing: const Icon(Icons.chevron_right),
+            // 規約全文をアプリ内で閲覧できるようにする。
+            onTap: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(builder: (context) => const TermsScreen()),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
