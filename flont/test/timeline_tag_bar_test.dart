@@ -37,9 +37,8 @@ void main() {
           ),
         ),
       );
-      expect(find.byTooltip('前のタグ'), findsOneWidget);
-      expect(find.byTooltip('次のタグ'), findsOneWidget);
       await tester.pumpAndSettle();
+      expect(find.byTooltip('前のタグ'), findsNothing);
       final all = tester.getRect(
         find.byKey(const ValueKey('timeline-tag-all')),
       );
@@ -59,6 +58,11 @@ void main() {
           tester.state<ScrollableState>(scroll).position.pixels,
           greaterThan(0),
         );
+        final position = tester.state<ScrollableState>(scroll).position;
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('次のタグ'), findsNothing);
+        expect(find.byTooltip('前のタグ'), findsOneWidget);
         expect(
           tester
               .widget<IconButton>(

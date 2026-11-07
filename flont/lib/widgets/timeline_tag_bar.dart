@@ -143,8 +143,8 @@ class _TimelineTagBarState extends State<TimelineTagBar> {
             ),
           ),
         ),
-        Positioned(left: 0, child: _arrow(back: true)),
-        Positioned(right: 0, child: _arrow(back: false)),
+        if (_canBack) Positioned(left: 0, child: _arrow(back: true)),
+        if (_canNext) Positioned(right: 0, child: _arrow(back: false)),
       ],
     );
   }
