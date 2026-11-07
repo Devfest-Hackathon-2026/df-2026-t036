@@ -42,7 +42,11 @@ class _MainScreenState extends State<MainScreen> {
       authenticated: widget.me != null,
       apiBaseUrl: widget.apiBaseUrl,
     ),
-    ProfileScreen(me: widget.me, googleEmail: widget.googleEmail),
+    ProfileScreen(
+      me: widget.me,
+      googleEmail: widget.googleEmail,
+      apiBaseUrl: widget.apiBaseUrl,
+    ),
   ];
 
   @override

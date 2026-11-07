@@ -5,6 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080
 WORKDIR /app
 COPY requirements.txt .
+# pillow-heif wheels bundle the HEIF decoder; keep image codecs inside the same
+# pinned Python environment used locally and on Cloud Run.
 RUN pip install --no-cache-dir -r requirements.txt
 # 実行ユーザーを分離して、コンテナー内の権限を制限する。
 RUN useradd --create-home appuser
