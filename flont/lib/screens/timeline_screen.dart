@@ -6,6 +6,7 @@ import '../theme/page_layout.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/idea_card.dart';
+import '../widgets/masonry_layout.dart';
 import '../widgets/timeline_tag_bar.dart';
 import 'idea_detail_screen.dart';
 import '../theme/app_theme.dart';
@@ -334,6 +335,33 @@ class _TimelineScreenState extends State<TimelineScreen> {
     }
   }
 
+  Widget _buildIdeaCard(Map<String, dynamic> idea) {
+    final id = idea['ideaId'] as String;
+    final bookmarked = _bookmarks.contains(id);
+    return IdeaCard(
+      key: ValueKey(id),
+      onTap: () => _openDetail(idea),
+      title: idea['title'] as String,
+      borderColor: idea['isOwn'] == true
+          ? AppColors.accentGreen
+          : idea['hasDrawn'] == true
+          ? AppColors.accentYellow
+          : null,
+      backgroundColor: idea['isOwn'] == true
+          ? AppColors.ownIdea
+          : idea['hasDrawn'] == true
+          ? AppColors.drawnIdea
+          : null,
+      tags: (idea['tags'] as List).cast<String>(),
+      date: DateTime.parse(idea['createdAt'] as String),
+      pinned: bookmarked,
+      onPinPressed:
+          _loading || _saving || (!bookmarked && idea['canPin'] != true)
+          ? null
+          : () => _toggleBookmark(id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final layout = PageLayout.of(context);
@@ -394,82 +422,69 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 ),
               ),
             Expanded(
-              child: ListView.separated(
-                controller: _scrollController,
-                padding: layout.insets,
-                itemCount: _ideas.length + 1,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  if (index == _ideas.length) {
-                    if (_page == 0 && _nextCursor == null) {
-                      return !_loading && _error == null && _ideas.isEmpty
-                          ? Center(
-                              child: Text(
-                                _selectedTag == null
-                                    ? '掲載中のお題はありません。'
-                                    : 'このタグのお題はありません。',
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 900
+                      ? 3
+                      : constraints.maxWidth >= 600
+                      ? 2
+                      : 1;
+
+                  return ListView.separated(
+                    controller: _scrollController,
+                    padding: layout.insets,
+                    itemCount: 2,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      if (index == 1) {
+                        if (_page == 0 && _nextCursor == null) {
+                          return !_loading && _error == null && _ideas.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    _selectedTag == null
+                                        ? '掲載中のお題はありません。'
+                                        : 'このタグのお題はありません。',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+                        }
+                        // 前後ボタンの代わりに、取得可能なページを番号で選ぶ。
+                        final pageCount = _isPreview
+                            ? _previewPageCount
+                            : _cursors.length;
+                        return Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (var page = 0; page < pageCount; page++)
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(48, 48),
+                                  backgroundColor: page == _page
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer
+                                      : null,
+                                ),
+                                onPressed: _loading || _saving || page == _page
+                                    ? null
+                                    : () => _loadPage(page),
+                                child: Semantics(
+                                  selected: page == _page,
+                                  label: '${page + 1}ページ',
+                                  child: Text('${page + 1}'),
+                                ),
                               ),
-                            )
-                          : const SizedBox.shrink();
-                    }
-                    // 前後ボタンの代わりに、取得可能なページを番号で選ぶ。
-                    final pageCount = _isPreview
-                        ? _previewPageCount
-                        : _cursors.length;
-                    return Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (var page = 0; page < pageCount; page++)
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(48, 48),
-                              backgroundColor: page == _page
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer
-                                  : null,
-                            ),
-                            onPressed: _loading || _saving || page == _page
-                                ? null
-                                : () => _loadPage(page),
-                            child: Semantics(
-                              selected: page == _page,
-                              label: '${page + 1}ページ',
-                              child: Text('${page + 1}'),
-                            ),
-                          ),
-                      ],
-                    );
-                  }
-                  final idea = _ideas[index];
-                  final id = idea['ideaId'] as String;
-                  final bookmarked = _bookmarks.contains(id);
-                  return IdeaCard(
-                    key: ValueKey(id),
-                    onTap: () => _openDetail(idea),
-                    title: idea['title'] as String,
-                    borderColor: idea['isOwn'] == true
-                        ? AppColors.accentGreen
-                        : idea['hasDrawn'] == true
-                        ? AppColors.accentYellow
-                        : null,
-                    backgroundColor: idea['isOwn'] == true
-                        ? AppColors.ownIdea
-                        : idea['hasDrawn'] == true
-                        ? AppColors.drawnIdea
-                        : null,
-                    tags: (idea['tags'] as List).cast<String>(),
-                    date: DateTime.parse(idea['createdAt'] as String),
-                    pinned: bookmarked,
-                    onPinPressed:
-                        _loading ||
-                            _saving ||
-                            (!bookmarked && idea['canPin'] != true)
-                        ? null
-                        : () => _toggleBookmark(id),
+                          ],
+                        );
+                      }
+                      return MasonryLayout(
+                        columns: columns,
+                        children: _ideas.map(_buildIdeaCard).toList(),
+                      );
+                    },
                   );
                 },
               ),
