@@ -4,6 +4,33 @@ import 'package:illustration_exchange/screens/inbox_screen.dart';
 import 'package:illustration_exchange/screens/ideas_screen.dart';
 
 void main() {
+  for (final size in [
+    const Size(390, 844),
+    const Size(1280, 720),
+    const Size(844, 390),
+  ]) {
+    testWidgets('card and controls fit viewport $size', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            appBar: null,
+            bottomNavigationBar: SizedBox(height: 80),
+            body: InboxScreen(artworkTitles: ['A', 'B']),
+          ),
+        ),
+      );
+      final card = tester.getRect(find.byType(PageView));
+      final next = tester.getRect(find.byTooltip('次の作品'));
+      expect(card.bottom, lessThanOrEqualTo(next.top));
+      expect(next.bottom, lessThanOrEqualTo(size.height - 80));
+      expect(card.width / card.height, closeTo(3 / 4, 0.001));
+      expect(tester.takeException(), isNull);
+    });
+  }
   // 受信カードの輪郭が幅にかかわらず横3・縦4になることを確認する。
   testWidgets('受信カードは3対4で表示される', (tester) async {
     await tester.pumpWidget(
