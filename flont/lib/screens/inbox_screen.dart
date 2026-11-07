@@ -284,6 +284,32 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<Uint8List> _loadArtworkImage(ReceivedArtwork artwork) async {
+    var active = true;
+    try {
+      // 認証取得から画像の受信までに制限を設ける。
+      return await (() async {
+        final token = widget.idTokenProvider == null
+            ? await FirebaseAuth.instance.currentUser?.getIdToken()
+            : await widget.idTokenProvider!();
+        if (!mounted || !active) throw StateError('画像取得を中止しました。');
+        if (token == null || token.isEmpty) throw StateError('再度ログインしてください。');
+        final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+        final id = Uri.encodeComponent(artwork.submissionId!);
+        final response = await _client.get(
+          Uri.parse('$base/api/v1/artworks/$id/image'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+          throw StateError('画像を読み込めませんでした。');
+        }
+        return response.bodyBytes;
+      })().timeout(const Duration(seconds: 30));
+    } finally {
+      active = false;
+    }
+  }
+
   Future<void> _openArtwork(ReceivedArtwork artwork) async {
     _detailOpen = true;
     _pause();
@@ -296,7 +322,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
               ? () => createPreviewArtwork(
                   int.tryParse(artwork.submissionId!.split('-').last) ?? 0,
                 )
-              : null,
+              : () => _loadArtworkImage(artwork),
           onLike: artwork.submissionId == null
               ? null
               : () => _likeArtwork(artwork),

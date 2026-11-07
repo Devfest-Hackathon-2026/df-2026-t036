@@ -51,32 +51,32 @@ Widget screen(http.Client client, {bool active = true}) => MaterialApp(
 
 void main() {
   group('inbox API', () {
-    testWidgets(
-      'authenticated inbox opens the selected snapshot without marking read',
-      (tester) async {
-        final paths = <String>[];
-        final client = MockClient((request) async {
-          paths.add(request.url.path);
-          expect(request.headers['Authorization'], 'Bearer test-token');
-          expect(request.url.queryParameters['limit'], '20');
-          return page('Received idea');
-        });
-        await tester.pumpWidget(screen(client));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Received idea'));
-        await tester.pumpAndSettle();
-        expect(find.byType(ArtworkDetailScreen), findsOneWidget);
-        await tester.drag(find.byType(ListView), const Offset(0, -700));
-        await tester.pumpAndSettle();
-        expect(find.text('Artist'), findsOneWidget);
-        await tester.scrollUntilVisible(find.text('Snapshot description'), 200);
-        expect(find.text('Snapshot description'), findsOneWidget);
-        expect(find.text('tag'), findsOneWidget);
-        expect(paths, ['/api/v1/me/artworks/inbox']);
-        await tester.pumpWidget(const SizedBox());
-        client.close();
-      },
-    );
+    testWidgets('画像取得失敗でもスナップショットを表示し既読にしない', (tester) async {
+      final paths = <String>[];
+      final client = MockClient((request) async {
+        paths.add(request.url.path);
+        expect(request.headers['Authorization'], 'Bearer test-token');
+        if (request.url.path.endsWith('/image')) return http.Response('', 404);
+        expect(request.url.queryParameters['limit'], '20');
+        return page('Received idea');
+      });
+      await tester.pumpWidget(screen(client));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Received idea'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtworkDetailScreen), findsOneWidget);
+      await tester.drag(find.byType(ListView), const Offset(0, -700));
+      await tester.pumpAndSettle();
+      expect(find.text('Artist'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Snapshot description'), 200);
+      expect(find.text('Snapshot description'), findsOneWidget);
+      expect(find.text('tag'), findsOneWidget);
+      expect(paths, hasLength(2));
+      expect(paths.first, '/api/v1/me/artworks/inbox');
+      expect(paths.last, endsWith('/image'));
+      await tester.pumpWidget(const SizedBox());
+      client.close();
+    });
 
     testWidgets('pagination uses cursor and refresh discards old pages', (
       tester,

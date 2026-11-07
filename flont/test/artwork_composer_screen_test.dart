@@ -38,6 +38,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ArtworkComposerScreen(
+            preview: true,
             ideaId: 'idea',
             ideaTitle: 'お題',
             ideaCreatedAt: DateTime(2026, 11, 7),
@@ -68,9 +69,7 @@ void main() {
       expect(find.byKey(const ValueKey('artwork-preview')), findsNothing);
       expect(
         tester
-            .widget<FilledButton>(
-              find.byKey(const ValueKey('artwork-send-demo')),
-            )
+            .widget<FilledButton>(find.byKey(const ValueKey('artwork-send')))
             .onPressed,
         isNull,
       );
@@ -84,6 +83,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ArtworkComposerScreen(
+            preview: true,
             ideaId: 'idea',
             ideaTitle: '夜明けの庭',
             ideaCreatedAt: DateTime(2026, 11, 7),
@@ -93,9 +93,7 @@ void main() {
       );
       final area = tester.getSize(find.byType(AspectRatio));
       expect(area.width / area.height, closeTo(16 / 9, 0.001));
-      final send = tester.getRect(
-        find.byKey(const ValueKey('artwork-send-demo')),
-      );
+      final send = tester.getRect(find.byKey(const ValueKey('artwork-send')));
       expect(send.bottom, lessThanOrEqualTo(size.height));
       expect(tester.takeException(), isNull);
     });
@@ -106,6 +104,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ArtworkComposerScreen(
+          preview: true,
           ideaId: 'idea',
           ideaTitle: 'お題',
           ideaCreatedAt: DateTime(2026, 11, 7),
@@ -117,7 +116,7 @@ void main() {
     expect(find.byKey(const ValueKey('artwork-target-idea')), findsOneWidget);
     expect(find.text('#風景'), findsOneWidget);
     expect(find.text('2026.11.07'), findsOneWidget);
-    final send = find.byKey(const ValueKey('artwork-send-demo'));
+    final send = find.byKey(const ValueKey('artwork-send'));
     expect(tester.widget<FilledButton>(send).onPressed, isNull);
     await tester.ensureVisible(find.text('イラストを選択'));
     await tester.pumpAndSettle();
@@ -149,6 +148,7 @@ void main() {
     navigator.currentState!.push<void>(
       MaterialPageRoute(
         builder: (context) => ArtworkComposerScreen(
+          preview: true,
           ideaId: 'idea',
           ideaTitle: '夜明けの庭',
           ideaCreatedAt: DateTime(2026, 11, 7),
@@ -176,7 +176,7 @@ void main() {
     expect(find.byKey(const ValueKey('artwork-target-idea')), findsOneWidget);
     expect(find.text('#風景'), findsOneWidget);
     expect(find.text('2026.11.07'), findsOneWidget);
-    final send = find.byKey(const ValueKey('artwork-send-demo'));
+    final send = find.byKey(const ValueKey('artwork-send'));
     await tester.ensureVisible(send);
     await tester.tap(send);
     await tester.pumpAndSettle();
@@ -186,7 +186,7 @@ void main() {
     expect(find.byKey(const ValueKey('artwork-preview')), findsOneWidget);
     await tester.tap(send);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('artwork-confirm-demo')));
+    await tester.tap(find.byKey(const ValueKey('artwork-confirm')));
     await tester.pumpAndSettle();
     expect(find.text('送信完了（デモ）'), findsOneWidget);
     expect(
@@ -207,6 +207,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ArtworkComposerScreen(
+          preview: true,
           ideaId: 'idea',
           ideaTitle: 'お題',
           ideaCreatedAt: DateTime(2026, 11, 7),
@@ -223,7 +224,7 @@ void main() {
     expect(find.text('PNG・JPEG・WebP・HEIC/HEIFの画像を選択してください。'), findsOneWidget);
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('artwork-send-demo')))
+          .widget<FilledButton>(find.byKey(const ValueKey('artwork-send')))
           .onPressed,
       isNull,
     );
@@ -236,6 +237,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ArtworkComposerScreen(
+            preview: true,
             ideaId: 'idea',
             ideaTitle: 'お題',
             ideaCreatedAt: DateTime(2026, 11, 7),
@@ -256,9 +258,7 @@ void main() {
       expect(find.textContaining('このHEIC/HEIFはブラウザで表示できません'), findsOneWidget);
       expect(
         tester
-            .widget<FilledButton>(
-              find.byKey(const ValueKey('artwork-send-demo')),
-            )
+            .widget<FilledButton>(find.byKey(const ValueKey('artwork-send')))
             .onPressed,
         isNull,
       );
@@ -274,6 +274,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ArtworkComposerScreen(
+          preview: true,
           ideaId: 'idea',
           ideaTitle: 'お題',
           ideaCreatedAt: DateTime(2026, 11, 7),
@@ -298,7 +299,7 @@ void main() {
     expect(find.byKey(const ValueKey('artwork-preview')), findsNothing);
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('artwork-send-demo')))
+          .widget<FilledButton>(find.byKey(const ValueKey('artwork-send')))
           .onPressed,
       isNull,
     );
