@@ -71,7 +71,7 @@ Likelihoodは序数として扱う。生レスポンス全文や画像bytesは�
 
 ## 4. 判定ポリシー
 
-確定ポリシー（`possible-allowed-v1`）:
+確定ポリシー（`possible-allowed-v2`）:
 
 | SafeSearch値 | 処理 | M1での扱い |
 |---|---|---|
@@ -80,9 +80,9 @@ Likelihoodは序数として扱う。生レスポンス全文や画像bytesは�
 | `LIKELY`, `VERY_LIKELY` | 拒否 | 完成領域に保存せず、利用者へ投稿不可を返す |
 | 欠損、`UNKNOWN`、未知の列挙値 | 判定不能 | fail-closedで確定せず、retry可能状態または運用確認へ |
 
-5カテゴリすべてに同じ閾値を適用する。カテゴリ別閾値が必要になった場合はpolicy versionを上げ、既存sessionの再試行時にもどのルールを使ったか追跡できるようにする。SafeSearchは確率的な補助判定であり、判定結果を「違法性の確定」として表示しない。拒否メッセージはカテゴリや内部スコアを露出しない汎用文言とする。
+adult・spoof・violenceに同じ閾値を適用する。medical（医療表現）とracy（刺激の強い表現）は結果の取得・表示のみとし、承認・拒否・判定不能の判断に使わない。カテゴリ別閾値が必要になった場合はpolicy versionを上げ、既存sessionの再試行時にもどのルールを使ったか追跡できるようにする。SafeSearchは確率的な補助判定であり、判定結果を「違法性の確定」として表示しない。拒否メッセージはカテゴリや内部スコアを露出しない汎用文言とする。
 
-全カテゴリがPOSSIBLE以下ならapproved、1カテゴリでもLIKELY以上ならrejectedとする。拒否がなく、欠損・UNKNOWN・未知の値がある場合はretry_requiredとする。API障害は503のままとし、承認しない。現行デモはdecisionとpolicyVersionを返すが、投稿の保存・確定にはまだ接続していない。
+判定対象の3カテゴリがPOSSIBLE以下ならapproved、1カテゴリでもLIKELY以上ならrejectedとする。拒否がなく、欠損・UNKNOWN・未知の値がある場合はretry_requiredとする。API障害は503のままとし、承認しない。現行デモはdecisionとpolicyVersionを返すが、通常投稿では同じ基準を保存・確定の前に適用する。
 
 ## 5. 状態遷移・冪等性
 

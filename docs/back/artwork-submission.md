@@ -10,7 +10,7 @@
 - 7日未満はピン不要。7〜30日未満は現在保持中の事前ピンが必要。
 - 描き手×お題のSHA-256をsubmissionIdとする。履歴は画像削除後も維持し、1人1お題1回を保証する。
 - 入力の実形式・容量・画素数・静止画・デコードをサーバーで検証し、正規化する。
-- Visionへ直接送信し、全5カテゴリがPOSSIBLE以下の場合だけ承認。LIKELY以上は422 IMAGE_REJECTED、不明・障害は503で未確定。
+- Visionへ直接送信し、adult・spoof・violenceの3カテゴリがPOSSIBLE以下の場合だけ承認。LIKELY以上は422 IMAGE_REJECTED、不明・障害は503で未確定。
 - 審査成功後にWebPへ変換し、正式保存する。Vision用の一時Storage保存は行わない。
 
 ## StorageとFirestore
@@ -50,3 +50,5 @@ DBの確定結果が不明な場合は、先にFirestoreトランザクション
 `GET /api/v1/artworks/{submissionId}/image` は登録済みactiveの受信者だけにWebPを返す。存在しない作品・他人の作品・削除済み・期限到達は同じ404とする。Storage取得の前後で状態を再確認し、no-storeとnosniffを付けて返す。公開URLは発行しない。受信画面は認証付きで取得し、実画像の表示成功後に既読APIを呼ぶ。
 
 投稿画面からお題詳細へ戻った場合、サーバーのcanSubmitとhasDrawnを再取得して送信ボタンを更新する。プレビューは実APIを呼ばない。期限切れ作品画像の物理削除は別途実装が必要。
+
+medicalとracyは表示用に取得するが、判定から除外する。両カテゴリの高い値・不明・欠損で投稿を拒否または保留にしない。ポリシーはpossible-allowed-v2。

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -105,49 +104,30 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
       // ファイルの申告容量だけでなく、読み込んだ実データの容量と形式も確認する。
       final format = checkArtworkImageFormat(file.name, bytes);
       var previewAvailable = false;
-      var animated = false;
       int? previewWidth;
       int? previewHeight;
+      var prepared = bytes;
       try {
-        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+        // Web未対応のImageDescriptor.width/heightを使わず、実フレームを確認する。
+        final image = await decodeArtworkImage(bytes);
         try {
-          final descriptor = await ui.ImageDescriptor.encoded(buffer);
-          try {
-            final longest = descriptor.width > descriptor.height
-                ? descriptor.width
-                : descriptor.height;
-            final scale = longest > 1600 ? 1600 / longest : 1.0;
-            previewWidth = (descriptor.width * scale).round().clamp(1, 1600);
-            previewHeight = (descriptor.height * scale).round().clamp(1, 1600);
-            final codec = await descriptor.instantiateCodec(
-              targetWidth: previewWidth,
-              targetHeight: previewHeight,
-            );
-            try {
-              if (codec.frameCount != 1) {
-                animated = true;
-                throw StateError('静止画を1枚選択してください。');
-              }
-              final frame = await codec.getNextFrame();
-              frame.image.dispose();
-              previewAvailable = true;
-            } finally {
-              codec.dispose();
-            }
-          } finally {
-            descriptor.dispose();
-          }
+          if (!mounted) return;
+          final longest = image.width > image.height
+              ? image.width
+              : image.height;
+          final scale = longest > 1600 ? 1600 / longest : 1.0;
+          previewWidth = (image.width * scale).round().clamp(1, 1600);
+          previewHeight = (image.height * scale).round().clamp(1, 1600);
+          // 変換は選択時に一度だけ行い、同じデータで再試行できるよう保持する。
+          if (!widget.preview) prepared = await encodeVisionImage(image);
+          previewAvailable = true;
         } finally {
-          buffer.dispose();
+          image.dispose();
         }
       } catch (error) {
-        // HEIFを表示できない環境では、未確認の画像を送信可能にしない。
-        if (animated || format != ArtworkImageFormat.heif) rethrow;
+        // 非対応HEIFは未確認のまま送信せず、静止画・画素数の違反は拒否する。
+        if (error is StateError || format != ArtworkImageFormat.heif) rethrow;
       }
-      // 実送信するデータをここで一度だけ変換し、再試行時も同じバイト列を使う。
-      final prepared = !widget.preview && previewAvailable
-          ? await prepareVisionImage(bytes)
-          : bytes;
       if (!mounted) return;
       if (!widget.preview && prepared.length > 20 * 1024 * 1024) {
         throw StateError('変換後の画像が20MBを超えました。小さい画像を選んでください。');
