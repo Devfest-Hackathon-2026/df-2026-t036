@@ -21,6 +21,7 @@ class Settings:
     cors_allow_localhost: bool = False
     maintenance_mode: bool = False
     retry_after_seconds: int = 30
+    vision_demo_bucket: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -49,4 +50,5 @@ class Settings:
             cors_allow_localhost=local_cors == 'true',
             maintenance_mode=maintenance == "true",
             retry_after_seconds=retry,
+            vision_demo_bucket=(values.get("VISION_DEMO_BUCKET") or "").strip() or None,
         )

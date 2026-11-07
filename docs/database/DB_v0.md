@@ -13,7 +13,7 @@
 | ログイン | 画面のGoogleログイン。招待コード・メール許可リストなし |
 | 表示名 | 初回登録時にサーバーでランダム生成し保存。変更機能なし |
 | お題・ピン | 5スロット、タグ、ピン5件、7日／30日のルールを維持 |
-| 作品 | HEIC/HEIF対応、1人1お題1回、受信者限定、送信から7日 |
+| 作品 | JPEG/PNG/HEIC/HEIF入力（WebP入力非対応）、WebP完成画像、1人1お題1回、受信者限定、送信から7日 |
 | 受信箱 | 自動更新、作品の未読・既読を維持 |
 | 実績 | お題数・描いた数・いいね数、描いた履歴画面を維持 |
 | 画像保存 | 変換・正規化した1枚を表示・ダウンロードに共用。サムネイルなし |
@@ -121,7 +121,7 @@ ideaIdはFlutterが操作ごとにUUID v4を生成し、同じ操作の再送で
 | expiresAt | timestamp | createdAt＋7日 |
 | deletedAt | timestamp / null | 初期null、受信者の手動削除時に設定 |
 
-thumbnailPathは作らない。HEIC/HEIF・JPEG・PNG・WebPを検証し、必要な変換・EXIF除去・サイズ調整を行う。正規化後の1枚を表示とダウンロードへ共用する。原本30MB・変換後10MB・長辺2,560pxは暫定、最大画素数・出力形式は実機で確定する。透過保持を検証する。
+thumbnailPathは作らない。FlutterでJPEG・PNG等を可能な範囲で事前圧縮し、FastAPIで実データを検証、メタデータ除去後WebPへ正規化し、Vision SafeSearchで審査する。WebPは完成画像の保存形式とする。入力形式・Web HEIC対応、圧縮品質、最大画素数・安全容量上限は実機・Cloud Run・Vision上限を確認して決める。
 
 ### 2.6 users/{uid}/drawnHistory/{submissionId}
 
@@ -171,6 +171,31 @@ JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後�
 
 名前変更・通知・退会のAPIは作らない。画像APIはCache-Control: private, no-store、保存APIはContent-Disposition: attachmentを付ける。公開URLや署名URLへのリダイレクトを返さない。
 
+### 実装進捗（2026-11-06）
+
+以下はこのリポジトリのFastAPIコード上の実装状況。**実装済みはコードがある状態を示し、実Firebase／Firestore／Storageを使った本番相当の動作確認完了を意味しない。**
+
+| 状態 | API | 実装内容・残作業 |
+|---|---|---|
+| 実装済み | `GET /health` | 起動確認。認証・外部サービス接続を必要としない。 |
+| 実装済み | `POST /users/register`、`GET /me` | Google IDトークン検証、初回登録、本人情報と累計取得。 |
+| 実装済み | `/ideas`、`/me/ideas`、`/me/slots`、`/me/pins`、`/pins/{ideaId}` | お題の作成・閲覧・削除、枠、ピンの取得・操作。Firestore処理を含む。 |
+| 準備済み | `ArtworkPrepareInput` | JPEG/PNG/HEIC/HEIFと正の申告サイズ（512 MiBの高い安全上限）の入力契約。Storageアップロード発行APIは未実装。 |
+| 実装済み・未動作確認 | `GET /me/drawn-history` | 描いた履歴と参照可能なお題、いいね状態をページ取得。 |
+| 実装済み・未動作確認 | `GET /me/artworks/inbox` | 有効な受信作品のメタデータ、描き手名、既読・いいね状態をページ取得。画像は扱わない。 |
+| 実装済み・未動作確認 | `POST /artworks/{submissionId}/read` | 受信者の初回既読時刻を冪等に記録。Flutterは画像表示成功後に呼ぶ。 |
+| 実装済み・未動作確認 | `POST /artworks/{submissionId}/like` | 受信者のいいねを一度だけ反映し、描き手の履歴と累計を更新。 |
+| 未実装 | `POST /artworks/prepare` | 送信資格・入力画像条件を確認し、一時アップロード用セッションと制限付きアップロード先を発行する。Cloud Storage連携が必要。 |
+| 未実装 | `POST /artworks/commit` | アップロード実体・形式・サイズ・送信資格を再検証し、画像を正規化して作品・描いた履歴・累計・セッション状態を一度だけ確定する。Cloud StorageとFirestoreの回復可能な連携が必要。 |
+| 未実装 | `GET /artworks/{submissionId}/image` | 受信者・期限・削除状態を確認して画像を認証付きで返す。Cloud Storage連携が必要。公開URLや長期有効URLは返さない。 |
+| 未実装 | `GET /artworks/{submissionId}/download` | 画像APIと同じ認可を適用し、正規化画像を添付ファイルとして返す。Cloud Storage連携が必要。 |
+| 未実装 | `DELETE /artworks/{submissionId}` | 受信者のみ作品を即時不可視化する。画像の物理削除は定期整理で再試行できるようにする。 |
+| 未実装 | `POST /internal/cleanup` | 内部呼び出しを認証し、期限切れ作品・一時セッション・一時画像・無効ピン等を上限付きで整理する。Cloud Storage連携とScheduler等の呼出設定が必要。 |
+
+未実装の作品送信・画像取得・削除・期限整理は、メタデータAPIとは別の作業段階。特にprepare/commitおよびimage/download/cleanupはCloud Storageを伴う。read/like・履歴・受信箱は画像バイト列を扱わない。Flutter側では画像が表示できてからreadを呼び、Storage実体の受け渡しとAPI認可を分離する。
+
+現状、描いた履歴・受信箱・既読・いいねの追加コードはテスト実行環境の問題でpytest未実行であり、Firebase実データを用いた統合確認も未完了。Firestore複合インデックスをデプロイする環境では、同梱の `firestore.indexes.json` も適用する。
+
 Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaはお題の保存項目とideaId / ownerNickname / canPin / canSubmit。InboxItemはsubmissionId / artistId / artistNickname / sourceIdeaId / sourceIdeaSnapshot / liked / readAt / createdAt / expiresAt。Storageパスは返さない。履歴はsubmissionId / ideaId / submittedAt / lastLiked / idea / ideaAvailability、参照不可ならideaはnull。
 
 ### 一覧・受信箱の自動更新（確定方針）
@@ -202,10 +227,10 @@ Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaは�
 必要な読み取りを全て先に行う。時刻は各再試行で再評価する。StorageはFirestoreトランザクションの対象外なので、変換・画像保存・削除をトランザクション関数内で実行しない。
 
 1. prepareで資格を確認し、セッション・書込専用の一時アップロード先を発行。資格は予約しない。
-2. commitで実体を検証し、世代番号を固定して変換する。HEIC/HEIFはサーバーでデコード可能なことを実機サンプルで検証。
-3. uploadIdから決定する完成パスに、未存在条件で正規化画像を1枚保存する。保存時にセッション識別子・入力世代・変換仕様の版をサーバー管理のオブジェクトメタデータとして記録する。画像保存後にDB確定が失敗した場合、同じuploadIdの再試行では既存完成画像のメタデータ・世代とセッションを照合し、一致する検証済み画像を上書きせず再利用する。並行保存で未存在条件が失敗した場合も、保存済み画像を再取得して同じ照合を行う。不一致なら確定せず409 UPLOAD_CONFLICTとし、上書きしない。入力世代は一度固定したら再試行で変更しない。
+2. commitで実体を検証し、世代番号を固定してWebPへ変換する。SafeSearch対象となるstaging WebPを非公開保存し、Vision APIへgs:// URIを渡す。HEIC/HEIFをM1で受け付ける場合はサーバーでデコード可能なことをDocker/Linux実機サンプルで検証。
+3. SafeSearch通過後、uploadIdから決定する完成パスに、未存在条件でWebPを1枚copyする。保存時にセッション識別子・入力generation・staging generation・変換仕様versionをサーバー管理メタデータとして記録する。完成物保存後にDB確定が失敗した場合、同じuploadIdの再試行では既存完成画像のメタデータ・世代とセッションを照合し、一致する検証済み画像を上書きせず再利用する。並行保存で未存在条件が失敗した場合も、保存済み画像を再取得して同じ照合を行う。不一致なら確定せず409 UPLOAD_CONFLICTとし、上書きしない。入力世代は一度固定したら再試行で変更しない。
 4. 完成画像を再利用する場合も、Firestoreで資格・pending状態・期限・固定した入力世代を再確認し、作品・履歴・累計・committedを確定する。committedの再送は画像再処理より先に判定し、送信結果だけを返す。
-5. 期限切れセッションはexpiredへ遷移してから掃除し、commitと競合させる。committedが参照する完成画像は消さず、一時画像だけ回収する。
+5. 期限切れセッションはexpiredへ遷移してから掃除し、commitと競合させる。committedが参照する完成画像は消さず、入力一時画像と審査staging画像だけ回収する。
 6. 未確定セッションは1回の掃除直後に消さず、実行中処理・発行済み書込権限の終了を待つ猶予期間中、繰り返し掃除する。猶予期間・処理上限を実装前に決定し、遅れて保存された画像も回収する。
 
 受信作品はdeletedAt設定時またはexpiresAt到達で即時に取得不可。定期処理は画像を削除してから作品文書を消す。失敗時は文書・パスを残して再試行。既にない画像は成功扱い。作品文書や掃除前のセッションへ直接TTLを設定しない。多重起動を避け、失敗をサーバーログに残す。
@@ -229,7 +254,7 @@ Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaは�
 - [ ] Googleログインで誰でも初回登録でき、ランダム名・累計・枠・ピンが初期化される。再送で値が変わらない。
 - [ ] 最大5掲載・5ピン。6件目・自己ピン・自己送信を拒否し、同時操作でも上限を守る。
 - [ ] タイトル・説明・タグの検証、編集不可、7日／30日境界と本人・送信済み描き手の例外が一致する。
-- [ ] HEIC/HEIF・JPEG・PNG・WebPを検証し、1枚の正規化画像を表示と保存に共用。サムネイルを生成しない。
+- [ ] Flutter圧縮後の画像をFastAPIで再検証し、WebPへ正規化してVision SafeSearchを通す。1枚の完成画像を表示と保存に共用し、サムネイルを生成しない。
 - [ ] 送信は1人1お題1回。通信断・並行commitでも作品・履歴・累計は1回だけ確定する。
 - [ ] 受信者のみ画像を取得可能。自動更新で新着表示され、一覧取得では未読を維持し、初回詳細表示で既読になる。
 - [ ] 画面離脱・背景タブでポーリングを停止し、復帰時に再取得。タブ終了後のアップロード再開は行わない。

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'terms_screen.dart';
+import 'vision_demo_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, this.nickname, this.googleEmail});
+  const SettingsScreen({super.key, this.nickname, this.googleEmail, this.apiBaseUrl = 'http://localhost:8080'});
 
   final String? nickname;
   final String? googleEmail;
+  final String apiBaseUrl;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -87,6 +89,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(height: 1, indent: 16, endIndent: 16),
           _sectionTitle(context, 'サポート'),
+          ListTile(
+            leading: const Icon(Icons.image_search_outlined),
+            title: const Text('Vision API デモ'),
+            subtitle: const Text('画像を選んでSafeSearchの判定を見る'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VisionDemoScreen(apiBaseUrl: widget.apiBaseUrl),
+              ),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.description_outlined),
             title: const Text('利用規約'),

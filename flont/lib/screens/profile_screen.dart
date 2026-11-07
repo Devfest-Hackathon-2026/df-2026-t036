@@ -6,11 +6,12 @@ import 'drawing_history_screen.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, this.me, this.googleEmail});
+  const ProfileScreen({super.key, this.me, this.googleEmail, this.apiBaseUrl = 'http://localhost:8080'});
 
   // ログインしたユーザーの名前と実際の累計を表示する。
   final Map<String, dynamic>? me;
   final String? googleEmail;
+  final String apiBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +36,7 @@ class ProfileScreen extends StatelessWidget {
                         builder: (_) => SettingsScreen(
                           nickname: me?['nickname'] as String?,
                           googleEmail: googleEmail,
+                          apiBaseUrl: apiBaseUrl,
                         ),
                       ),
                     );

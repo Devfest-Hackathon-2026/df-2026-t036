@@ -8,6 +8,7 @@ from .errors import ERROR_RESPONSES, install_error_handlers
 from .middleware import RequestContextMiddleware
 from .ideas import router as ideas_router
 from .artworks import router as artworks_router
+from .vision_demo import router as vision_demo_router
 from .users import router
 
 
@@ -32,6 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(ideas_router)
     app.include_router(artworks_router)
+    app.include_router(vision_demo_router)
 
     @app.get("/health")
     def health() -> dict[str, str]:
