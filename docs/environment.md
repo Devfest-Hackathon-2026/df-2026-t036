@@ -156,6 +156,8 @@ gcloud run services describe $Service --region $Region --format="value(status.ur
 
 ## 参考資料
 
+期限切れピンの内部APIとCloud Schedulerの登録手順は [期限切れピン整理](back/pin-cleanup.md) を参照してください。
+
 - [Flutterのインストール](https://docs.flutter.dev/install)
 - [Flutterのネットワーク通信](https://docs.flutter.dev/cookbook/networking/fetch-data)
 - [FastAPI Docker構成](https://fastapi.tiangolo.com/deployment/docker/)

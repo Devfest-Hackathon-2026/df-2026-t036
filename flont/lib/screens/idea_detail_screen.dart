@@ -36,6 +36,8 @@ class IdeaDetailScreen extends StatefulWidget {
     this.onDelete,
     this.preview = false,
     this.previewCanSubmit = false,
+    this.client,
+    this.idTokenProvider,
   });
 
   final IdeaSlotData idea;
@@ -46,6 +48,9 @@ class IdeaDetailScreen extends StatefulWidget {
   final bool preview;
   // プレビューでも、未描画で受付可能なお題だけ送信ボタンを表示する。
   final bool previewCanSubmit;
+  // 履歴画面と通信・認証を共用し、詳細遷移も実接続なしで検証する。
+  final http.Client? client;
+  final Future<String?> Function()? idTokenProvider;
 
   @override
   State<IdeaDetailScreen> createState() => _IdeaDetailScreenState();
@@ -95,19 +100,19 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
       _error = null;
     });
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final token = widget.idTokenProvider == null
+          ? await FirebaseAuth.instance.currentUser?.getIdToken()
+          : await widget.idTokenProvider!();
       if (token == null || token.isEmpty) {
         throw StateError('ログイン情報を取得できません。再度ログインしてください。');
       }
-      final response = await http
-          .get(
-            Uri.parse(
-              '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
-              '/api/v1/ideas/${widget.idea.ideaId}',
-            ),
-            headers: {'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 30));
+      final response = await (widget.client?.get ?? http.get)(
+        Uri.parse(
+          '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
+          '/api/v1/ideas/${widget.idea.ideaId}',
+        ),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
         throw StateError(_messageFromResponse(response));
       }

@@ -1,35 +1,30 @@
-
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'history_screen.dart';
 
 class IdeaHistoryScreen extends StatelessWidget {
-  const IdeaHistoryScreen({super.key});
+  const IdeaHistoryScreen({
+    super.key,
+    this.apiBaseUrl = 'http://localhost:8080',
+    this.authenticated = false,
+    this.client,
+    this.idTokenProvider,
+  });
+
+  // 本人の履歴だけを認証済みAPIから取得する。
+  final String apiBaseUrl;
+  final bool authenticated;
+  final http.Client? client;
+  final Future<String?> Function()? idTokenProvider;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('アイデア履歴')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          ListTile(
-            leading: Icon(Icons.lightbulb_outline),
-            title: Text('ファンタジー世界のキャラクター'),
-            subtitle: Text('公開中'),
-          ),
-          Divider(),
-          ListTile(
-            leading: Icon(Icons.lightbulb_outline),
-            title: Text('近未来の街並み'),
-            subtitle: Text('ピン受付中'),
-          ),
-          Divider(),
-          ListTile(
-            leading: Icon(Icons.lightbulb_outline),
-            title: Text('和風のオリジナルキャラクター'),
-            subtitle: Text('受付終了'),
-          ),
-        ],
-      ),
+    return HistoryScreen(
+      drawn: false,
+      apiBaseUrl: apiBaseUrl,
+      authenticated: authenticated,
+      client: client,
+      idTokenProvider: idTokenProvider,
     );
   }
 }

@@ -1,29 +1,30 @@
-
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'history_screen.dart';
 
 class DrawingHistoryScreen extends StatelessWidget {
-  const DrawingHistoryScreen({super.key});
+  const DrawingHistoryScreen({
+    super.key,
+    this.apiBaseUrl = 'http://localhost:8080',
+    this.authenticated = false,
+    this.client,
+    this.idTokenProvider,
+  });
+
+  // 作品画像を含めず、送信先のお題と最終いいね状態を表示する。
+  final String apiBaseUrl;
+  final bool authenticated;
+  final http.Client? client;
+  final Future<String?> Function()? idTokenProvider;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('描いた履歴')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          ListTile(
-            leading: Icon(Icons.brush_outlined),
-            title: Text('魔法使いの女の子'),
-            subtitle: Text('イラスト送信済み'),
-          ),
-          Divider(),
-          ListTile(
-            leading: Icon(Icons.brush_outlined),
-            title: Text('森の中の小さな家'),
-            subtitle: Text('イラスト送信済み'),
-          ),
-        ],
-      ),
+    return HistoryScreen(
+      drawn: true,
+      apiBaseUrl: apiBaseUrl,
+      authenticated: authenticated,
+      client: client,
+      idTokenProvider: idTokenProvider,
     );
   }
 }

@@ -113,14 +113,10 @@ def test_maintenance_exempts_only_cleanup_and_health():
     """メンテナンス中も内部処理への経路を維持し、類似パスは除外しない。"""
     app = create_app(Settings(maintenance_mode=True, retry_after_seconds=12))
 
-    @app.post("/api/v1/internal/cleanup")
-    def cleanup():
-        # 実際のcleanup実装では別途内部認証を必須にする。
-        return {"test": "reachable"}
-
     with TestClient(app) as client:
         assert client.get("/health").status_code == 200
-        assert client.post("/api/v1/internal/cleanup").status_code == 200
+        # メンテナンスを迂回しても、内部APIの認証は省略しない。
+        assert client.post("/api/v1/internal/cleanup").status_code == 401
         for path in ("/api/v1/me", "/api/v1/internal/cleanup/other", "/api/v1/internal/cleanup"):
             response = client.get(path, headers={"Origin": "http://localhost:3000"})
             assert response.status_code == 503
