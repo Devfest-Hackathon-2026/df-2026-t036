@@ -44,10 +44,20 @@ class OversizedImage extends XFile {
 }
 
 // ネイティブ画像変換の完了を待ち、実際の変換結果で画面を検証する。
-Future<void> chooseImage(WidgetTester tester) async {
+Future<void> chooseImage(WidgetTester tester, {bool wait = true}) async {
   await tester.runAsync(() async {
     await tester.tap(find.text('画像を選択'));
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (!wait) return;
+    // 固定時間ではなく、変換の完了で選択ボタンが有効になるまで待つ。
+    for (var attempt = 0; attempt < 500; attempt++) {
+      await tester.pump();
+      final button = tester.widget<OutlinedButton>(
+        find.byType(OutlinedButton).first,
+      );
+      if (button.onPressed != null) return;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    fail('画像選択・変換が完了しませんでした');
   });
 }
 
@@ -78,7 +88,7 @@ void main() {
   testWidgets('画像選択中に画面を破棄しても状態更新しない', (tester) async {
     final selection = Completer<XFile?>();
     await tester.pumpWidget(screen(() => selection.future));
-    await chooseImage(tester);
+    await chooseImage(tester, wait: false);
     await tester.pumpWidget(const SizedBox());
     selection.complete(image());
     await tester.pump();

@@ -192,10 +192,11 @@ void main() {
     final client = MockClient((_) async => page([]));
     await tester.pumpWidget(screen(client));
     await tester.pumpAndSettle();
-    expect(find.text('まだアイデア履歴はありません。'), findsOneWidget);
+    // mainの共通履歴画面に合わせ、空と未ログインを別々に確認する。
+    expect(find.text('まだ履歴はありません'), findsOneWidget);
     await tester.pumpWidget(const MaterialApp(home: DrawingHistoryScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('履歴を表示するにはログインしてください。'), findsOneWidget);
+    expect(find.text('ログインすると履歴を表示できます。'), findsOneWidget);
     client.close();
   });
 }

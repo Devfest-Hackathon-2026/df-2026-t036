@@ -1,103 +1,119 @@
-import 'dart:convert';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
-import '../theme/app_theme.dart';
+import '../services/authenticated_api.dart';
 import '../theme/page_layout.dart';
+import '../theme/app_theme.dart';
 import '../widgets/idea_card.dart';
 import 'idea_detail_screen.dart';
 
-/// 二つの履歴画面で認証・ページング・再試行を共用する。
+enum HistoryKind { ideas, drawings }
+
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
     super.key,
-    required this.drawn,
-    required this.apiBaseUrl,
-    required this.authenticated,
+    required this.kind,
+    this.apiBaseUrl = 'http://localhost:8080',
+    this.authenticated = false,
     this.client,
     this.idTokenProvider,
   });
-
-  final bool drawn;
+  final HistoryKind kind;
   final String apiBaseUrl;
   final bool authenticated;
   final http.Client? client;
   final Future<String?> Function()? idTokenProvider;
-
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  late final http.Client _client = widget.client ?? http.Client();
+  late AuthenticatedApi _api = _makeApi();
+  AuthenticatedApi _makeApi() => AuthenticatedApi(
+    baseUrl: widget.apiBaseUrl,
+    client: widget.client,
+    idTokenProvider: widget.idTokenProvider,
+  );
+  bool get _drawing => widget.kind == HistoryKind.drawings;
+  bool get _preview => kDebugMode && const bool.fromEnvironment('DEV_PREVIEW');
   List<Map<String, dynamic>> _items = [];
+  final _previewDeleted = <String>{};
   String? _cursor;
   String? _error;
   bool _loading = false;
   bool _retryAppend = false;
   int _generation = 0;
-  Duration _offset = Duration.zero;
-  bool get _preview => kDebugMode && const bool.fromEnvironment('DEV_PREVIEW');
-  DateTime get _now => DateTime.now().add(_offset);
+  Duration _clockOffset = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    if (widget.authenticated && !_preview) _load();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _api.dispose();
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant HistoryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.apiBaseUrl != widget.apiBaseUrl ||
-        oldWidget.authenticated != widget.authenticated ||
-        oldWidget.drawn != widget.drawn) {
-      // 接続対象が変わった後に古い応答やカーソルを混ぜない。
+    if (widget.apiBaseUrl != oldWidget.apiBaseUrl ||
+        widget.authenticated != oldWidget.authenticated ||
+        widget.kind != oldWidget.kind) {
       _generation++;
+      _api.dispose();
+      _api = _makeApi();
       _items = [];
-      _cursor = null;
       _error = null;
+      _clockOffset = Duration.zero;
+      _cursor = null;
       _loading = false;
-      if (widget.authenticated && !_preview) _load();
+      _load();
     }
   }
 
-  Future<http.Response> _request(String path, {bool delete = false}) async {
-    final token = widget.idTokenProvider == null
-        ? await FirebaseAuth.instance.currentUser?.getIdToken()
-        : await widget.idTokenProvider!();
-    if (token == null || token.isEmpty) throw StateError('再度ログインしてください。');
-    final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
-    final uri = Uri.parse('$base/api/v1$path');
-    final headers = {'Authorization': 'Bearer $token'};
-    final response =
-        await (delete
-                ? _client.delete(uri, headers: headers)
-                : _client.get(uri, headers: headers))
-            .timeout(const Duration(seconds: 30));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      if (response.statusCode == 404) throw StateError('参照できません');
-      var message = '読み込みに失敗しました。再試行してください。';
-      try {
-        final body = jsonDecode(utf8.decode(response.bodyBytes));
-        message = body['error']['message'] as String;
-      } catch (_) {
-        // JSON以外の応答でも既存の一覧を維持して再試行を案内する。
-      }
-      throw StateError(message);
-    }
-    return response;
+  Map<String, dynamic> _sample(int index) {
+    final created = DateTime.now().subtract(Duration(days: [2, 10, 35][index]));
+    final idea = <String, dynamic>{
+      'ideaId': 'history-preview-$index',
+      'title': ['夜明けの庭', '旅する天文台', '青い花'][index],
+      'description': '履歴から開いたお題のプレビューです。',
+      'tags': ['風景'],
+      'createdAt': created.toIso8601String(),
+      'publishedUntil': created.add(const Duration(days: 7)).toIso8601String(),
+      'acceptUntil': created.add(const Duration(days: 30)).toIso8601String(),
+    };
+    return _drawing
+        ? {
+            'submissionId': 'preview-submission-$index',
+            'ideaId': idea['ideaId'],
+            'submittedAt': created
+                .add(const Duration(hours: 2))
+                .toIso8601String(),
+            'lastLiked': index == 0,
+            'ideaAvailability': index == 2 ? 'unavailable' : 'available',
+            'idea': index == 2 ? null : idea,
+          }
+        : idea;
   }
 
   Future<void> _load({bool append = false}) async {
-    if (!widget.authenticated ||
-        _preview ||
-        (append && (_loading || _cursor == null))) {
+    if (append && (_loading || _cursor == null)) return;
+    if (_preview) {
+      setState(() {
+        _items = List.generate(
+          3,
+          _sample,
+        ).where((item) => !_previewDeleted.contains(item['ideaId'])).toList();
+        _error = null;
+      });
       return;
     }
+    if (!widget.authenticated) return;
     final generation = ++_generation;
     setState(() {
       _loading = true;
@@ -105,34 +121,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _retryAppend = append;
     });
     try {
-      final query = Uri(
-        queryParameters: {'limit': '20', if (append) 'cursor': _cursor!},
-      ).query;
-      final path = widget.drawn ? '/me/drawn-history' : '/me/ideas';
-      final response = await _request('$path?$query');
-      final body =
-          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      final items = (body['items'] as List).cast<Map<String, dynamic>>();
-      final offset = DateTime.parse(
-        body['serverTime'] as String,
-      ).difference(DateTime.now());
+      final data = await _api.get(
+        _drawing ? '/me/drawn-history' : '/me/ideas',
+        query: {'limit': '20', if (append) 'cursor': _cursor!},
+      );
+      final items = (data['items'] as List)
+          .map(
+            (item) => item is Map<String, dynamic> ? item : <String, dynamic>{},
+          )
+          .toList();
+      final cursor = data['nextCursor'] as String?;
+      final serverTime = DateTime.parse(data['serverTime'] as String);
       if (!mounted || generation != _generation) return;
       setState(() {
-        // 更新成功時だけ後続ページを捨て、重複レコードはIDでまとめる。
+        _clockOffset = serverTime.difference(DateTime.now());
+        // 更新やページ境界で同じ履歴を二重表示しない。
         final all = append ? [..._items, ...items] : items;
         _items = {
-          for (final item in all)
-            item[widget.drawn ? 'submissionId' : 'ideaId']: item,
+          for (var index = 0; index < all.length; index++)
+            all[index][_drawing ? 'submissionId' : 'ideaId'] ??
+                    'invalid-$index':
+                all[index],
         }.values.toList();
-        _cursor = body['nextCursor'] as String?;
-        _offset = offset;
+        _cursor = cursor;
       });
     } catch (error) {
       if (mounted && generation == _generation) {
         setState(
           () => _error = error is StateError
               ? error.message.toString()
-              : '読み込みに失敗しました。再試行してください。',
+              : '履歴を読み込めませんでした。',
         );
       }
     } finally {
@@ -144,98 +162,117 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _open(Map<String, dynamic> idea) async {
     final id = idea['ideaId'] as String;
-    // 詳細表示中に完了した古い一覧取得が、削除後の結果を上書きしないようにする。
+    // 詳細を開く前の遅延応答で、削除後の一覧を上書きしない。
     _generation++;
     setState(() => _loading = false);
-    final deleted = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) => IdeaDetailScreen(
           idea: IdeaSlotData(
             ideaId: id,
             title: idea['title'] as String,
-            createdAt: DateTime.parse(idea['createdAt'] as String),
             expiresAt: DateTime.parse(idea['publishedUntil'] as String),
+            createdAt: DateTime.parse(idea['createdAt'] as String),
+            previewDescription: idea['description'] as String?,
+            previewTags: (idea['tags'] as List).cast<String>(),
           ),
           apiBaseUrl: widget.apiBaseUrl,
-          authenticated: widget.authenticated,
-          client: _client,
+          client: widget.client,
           idTokenProvider: widget.idTokenProvider,
-          onDelete: widget.drawn
+          authenticated: widget.authenticated,
+          preview: _preview,
+          onDelete: _drawing
               ? null
               : () async {
-                  await _request(
-                    '/ideas/${Uri.encodeComponent(id)}',
-                    delete: true,
-                  );
+                  if (!_preview) {
+                    await _api.delete('/ideas/${Uri.encodeComponent(id)}');
+                  }
+                  if (mounted) {
+                    setState(() {
+                      if (_preview) _previewDeleted.add(id);
+                      _generation++;
+                      _loading = false;
+                      _items.removeWhere((item) => item['ideaId'] == id);
+                    });
+                  }
                 },
         ),
       ),
     );
-    if (!mounted) return;
-    if (deleted == true) {
-      // 削除成功を直ちに反映し、再取得失敗でも削除済みカードを戻さない。
-      setState(() => _items.removeWhere((row) => row['ideaId'] == id));
-    }
-    await _load();
+    if (mounted && !_preview) await _load();
   }
 
-  String _status(Map<String, dynamic> idea) {
-    if (_now.isBefore(DateTime.parse(idea['publishedUntil'] as String))) {
-      return '掲載中';
-    }
-    if (_now.isBefore(DateTime.parse(idea['acceptUntil'] as String))) {
-      return 'ピン受付中';
-    }
-    return '受付終了';
+  Widget _unavailable(String message, {DateTime? submittedAt, bool? liked}) =>
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              if (submittedAt != null) Text('送信日: ${_date(submittedAt)}'),
+              if (liked != null) Text(liked ? 'いいね済み' : 'いいね未受信'),
+            ],
+          ),
+        ),
+      );
+  String _date(DateTime date) {
+    final local = date.toLocal();
+    return '${local.year}/${local.month}/${local.day}';
   }
 
-  String _date(String value) {
-    final date = DateTime.parse(value).toLocal();
-    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
-  }
-
-  Widget _item(Map<String, dynamic> item) {
-    final idea = widget.drawn ? item['idea'] as Map<String, dynamic>? : item;
-    final available =
-        idea != null &&
-        (!widget.drawn || item['ideaAvailability'] == 'available');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (available)
+  Widget _card(Map<String, dynamic> item) {
+    try {
+      final submittedAt = _drawing
+          ? DateTime.parse(item['submittedAt'] as String)
+          : null;
+      final liked = _drawing ? item['lastLiked'] as bool : null;
+      if (_drawing &&
+          (item['ideaAvailability'] != 'available' || item['idea'] == null)) {
+        return _unavailable('参照できません', submittedAt: submittedAt, liked: liked);
+      }
+      final idea = _drawing ? item['idea'] as Map<String, dynamic> : item;
+      final created = DateTime.parse(idea['createdAt'] as String);
+      final published = DateTime.parse(idea['publishedUntil'] as String);
+      final accept = DateTime.parse(idea['acceptUntil'] as String);
+      final id = idea['ideaId'] as String;
+      final tags = List<String>.from(idea['tags'] as List);
+      if (idea['description'] is! String) {
+        throw const FormatException('Invalid idea');
+      }
+      final now = DateTime.now().add(_clockOffset);
+      final status = now.isBefore(published)
+          ? '掲載中'
+          : now.isBefore(accept)
+          ? 'ピン受付中'
+          : '受付終了';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _drawing
+                ? '送信日: ${_date(submittedAt!)} / ${liked! ? 'いいね済み' : 'いいね未受信'}'
+                : status,
+          ),
+          const SizedBox(height: 6),
           IdeaCard(
+            key: ValueKey('history-$id'),
             title: idea['title'] as String,
-            date: DateTime.parse(idea['createdAt'] as String),
-            tags: (idea['tags'] as List).cast<String>(),
+            tags: tags,
+            date: created,
             showBookmark: false,
-            backgroundColor: widget.drawn
-                ? AppColors.drawnIdea
-                : AppColors.ownIdea,
-            borderColor: widget.drawn
+            // 自分のお題と描いたお題の色分けを維持する。
+            backgroundColor: _drawing ? AppColors.drawnIdea : AppColors.ownIdea,
+            borderColor: _drawing
                 ? AppColors.accentYellow
                 : AppColors.accentGreen,
             onTap: () => _open(idea),
-          )
-        else
-          const Card(
-            child: Padding(padding: EdgeInsets.all(20), child: Text('参照できません')),
           ),
-        const SizedBox(height: 8),
-        if (widget.drawn)
-          Text(
-            '送信日：${_date(item['submittedAt'] as String)}　${item['lastLiked'] == true ? 'いいね済み' : 'いいね未受信'}',
-          )
-        else
-          Text(_status(idea!)),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    _generation++;
-    if (widget.client == null) _client.close();
-    super.dispose();
+        ],
+      );
+    } catch (_) {
+      return _unavailable('この履歴を読み込めませんでした。');
+    }
   }
 
   @override
@@ -243,11 +280,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final layout = PageLayout.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.drawn ? '描いた履歴' : 'アイデア履歴'),
+        title: Text(_drawing ? '描いた履歴' : 'アイデア履歴'),
         actions: [
           IconButton(
             tooltip: '履歴を更新',
-            onPressed: !widget.authenticated || _preview ? null : () => _load(),
+            // 更新は進行中の追加取得より新しい結果を優先する。
+            onPressed: !_preview && !widget.authenticated
+                ? null
+                : () => _load(),
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -259,33 +299,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
             padding: layout.insets,
             children: [
               if (_loading) const LinearProgressIndicator(),
-              if (!widget.authenticated)
-                const Text('履歴を表示するにはログインしてください。')
-              else if (_preview)
-                const Text('プレビューでは履歴を取得しません。')
-              else ...[
-                if (_error != null) ...[
-                  Text(_error!),
-                  TextButton(
-                    onPressed: _loading
-                        ? null
-                        : () => _load(append: _retryAppend),
-                    child: const Text('再試行'),
-                  ),
-                ],
-                if (!_loading && _error == null && _items.isEmpty)
-                  Text(widget.drawn ? 'まだ描いた履歴はありません。' : 'まだアイデア履歴はありません。'),
-                for (final item in _items)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: _item(item),
-                  ),
-                if (_cursor != null)
-                  TextButton(
-                    onPressed: _loading ? null : () => _load(append: true),
-                    child: const Text('さらに読み込む'),
-                  ),
+              if (_error != null)
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(_error!),
+                    TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () => _load(append: _retryAppend),
+                      child: const Text('再試行'),
+                    ),
+                  ],
+                ),
+              if (!_preview && !widget.authenticated)
+                const Text('ログインすると履歴を表示できます。')
+              else if (!_loading && _error == null && _items.isEmpty)
+                const Text('まだ履歴はありません'),
+              for (final item in _items) ...[
+                _card(item),
+                const SizedBox(height: 16),
               ],
+              if (_cursor != null)
+                TextButton(
+                  onPressed: _loading ? null : () => _load(append: true),
+                  child: const Text('さらに読み込む'),
+                ),
             ],
           ),
         ),

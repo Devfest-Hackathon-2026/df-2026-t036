@@ -48,7 +48,6 @@ class IdeaDetailScreen extends StatefulWidget {
   final bool preview;
   // プレビューでも、未描画で受付可能なお題だけ送信ボタンを表示する。
   final bool previewCanSubmit;
-  // 履歴画面と通信・認証を共用し、詳細遷移も実接続なしで検証する。
   final http.Client? client;
   final Future<String?> Function()? idTokenProvider;
 
@@ -57,6 +56,13 @@ class IdeaDetailScreen extends StatefulWidget {
 }
 
 class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
+  late final http.Client _client = widget.client ?? http.Client();
+  @override
+  void dispose() {
+    if (widget.client == null) _client.close();
+    super.dispose();
+  }
+
   late String _title = widget.idea.title;
   // プレビューでは期限から補完し、実データではAPIの投稿日を引き継ぐ。
   late DateTime _createdAt =
@@ -106,13 +112,15 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
       if (token == null || token.isEmpty) {
         throw StateError('ログイン情報を取得できません。再度ログインしてください。');
       }
-      final response = await (widget.client?.get ?? http.get)(
-        Uri.parse(
-          '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
-          '/api/v1/ideas/${widget.idea.ideaId}',
-        ),
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 30));
+      final response = await _client
+          .get(
+            Uri.parse(
+              '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
+              '/api/v1/ideas/${widget.idea.ideaId}',
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
         throw StateError(_messageFromResponse(response));
       }
