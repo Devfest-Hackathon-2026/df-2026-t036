@@ -3,13 +3,14 @@ import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../theme/page_layout.dart';
 import 'package:http/http.dart' as http;
 
 import 'idea_composer_screen.dart';
 import 'idea_detail_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/idea_card.dart';
 
 const _developmentPreview = bool.fromEnvironment('DEV_PREVIEW');
 
@@ -18,10 +19,12 @@ class IdeasScreen extends StatefulWidget {
     super.key,
     this.apiBaseUrl = 'http://localhost:8080',
     this.authenticated = false,
+    this.active = true,
   });
 
   final String apiBaseUrl;
   final bool authenticated;
+  final bool active;
 
   @override
   State<IdeasScreen> createState() => _IdeasScreenState();
@@ -31,23 +34,20 @@ class _IdeasScreenState extends State<IdeasScreen> {
   static const _previewTitles = ['夜明けを待つ庭', '旅する小さな天文台'];
   static const _slotCount = 5;
 
-  final _pageController = PageController();
-  final _carouselGestureKey = GlobalKey();
   final List<IdeaSlotData?> _slotIdeas = List<IdeaSlotData?>.filled(
     _slotCount,
     null,
   );
-  int _currentPage = 0;
-  int? _activePointer;
-  int? _pressedSlotIndex;
-  Offset? _touchOrigin;
-  bool _hasDragged = false;
-  double _rotationX = 0;
+  bool _showBookmarks = false;
+  bool _bookmarksLoading = false;
+  bool _previewBookmarksInitialized = false;
+  String? _bookmarksError;
+  List<Map<String, dynamic>> _bookmarks = [];
+  final _removingBookmarks = <String>{};
   bool _isLoading = false;
   String? _loadError;
 
   bool get _isPreview => kDebugMode && _developmentPreview;
-  int get _occupiedCount => _slotIdeas.whereType<IdeaSlotData>().length;
 
   @override
   void initState() {
@@ -64,23 +64,131 @@ class _IdeasScreenState extends State<IdeasScreen> {
           previewTags: index == 0 ? const ['風景', 'ファンタジー'] : const ['星', '旅'],
         );
       }
-    } else if (widget.authenticated) {
+    } else if (widget.active && widget.authenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadSlots());
     }
   }
 
   @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+  void didUpdateWidget(covariant IdeasScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 他タブの保存解除・投稿・削除を、画面に戻った際の再取得で反映する。
+    if (!_isPreview &&
+        widget.active &&
+        widget.authenticated &&
+        (!oldWidget.active ||
+            oldWidget.authenticated != widget.authenticated ||
+            oldWidget.apiBaseUrl != widget.apiBaseUrl)) {
+      if (_showBookmarks) {
+        _loadBookmarks();
+      } else {
+        _loadSlots();
+      }
+    }
   }
 
-  void _moveToPage(int page) {
-    _pageController.animateToPage(
-      page,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-    );
+  // 切り替えのたびに保存済み一覧を取得し、TL側での変更も反映する。
+  Future<void> _loadBookmarks() async {
+    if (_bookmarksLoading) return;
+    if (_isPreview) {
+      // 再表示で初期化し直さず、プレビューで解除した状態を維持する。
+      if (_previewBookmarksInitialized) return;
+      _previewBookmarksInitialized = true;
+      setState(() {
+        _bookmarks = List.generate(
+          2,
+          (index) => <String, dynamic>{
+            'ideaId': 'preview-bookmark-$index',
+            'title': ['雨の日だけ開く喫茶店', '海の底にある図書館'][index],
+            'description': 'ブックマークしたお題のプレビューです。',
+            'canSubmit': true,
+            'publishedUntil': DateTime.now()
+                .add(const Duration(days: 5))
+                .toIso8601String(),
+            'tags': ['風景', 'ファンタジー'],
+            'createdAt': DateTime.now()
+                .subtract(Duration(days: index))
+                .toIso8601String(),
+          },
+        );
+      });
+      return;
+    }
+    if (!widget.authenticated) return;
+    setState(() {
+      _bookmarksLoading = true;
+      _bookmarksError = null;
+    });
+    try {
+      final token = await _getIdToken();
+      final response = await http
+          .get(
+            Uri.parse(
+              '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/me/pins',
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw StateError(_messageFromResponse(response));
+      }
+      final data =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (mounted) {
+        setState(
+          () =>
+              _bookmarks = (data['items'] as List).cast<Map<String, dynamic>>(),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _bookmarksError = error is StateError
+              ? error.message.toString()
+              : 'ブックマークを読み込めませんでした。',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _bookmarksLoading = false);
+    }
+  }
+
+  // 自分のお題の削除操作と区別し、保存だけを解除する。
+  Future<void> _removeBookmark(String id) async {
+    if (!_removingBookmarks.add(id)) return;
+    setState(() {});
+    try {
+      if (!_isPreview) {
+        final token = await _getIdToken();
+        final response = await http
+            .delete(
+              Uri.parse(
+                '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/pins/$id',
+              ),
+              headers: {'Authorization': 'Bearer $token'},
+            )
+            .timeout(const Duration(seconds: 30));
+        if (response.statusCode != 204) {
+          throw StateError(_messageFromResponse(response));
+        }
+      }
+      if (mounted) {
+        setState(() => _bookmarks.removeWhere((idea) => idea['ideaId'] == id));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is StateError ? error.message.toString() : '保存を解除できませんでした。',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _removingBookmarks.remove(id);
+      if (mounted) setState(() {});
+    }
   }
 
   Future<String> _getIdToken() async {
@@ -128,17 +236,33 @@ class _IdeasScreenState extends State<IdeasScreen> {
       final payload =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       final slots = payload['slots'] as Map<String, dynamic>;
-      final ideas = List<IdeaSlotData?>.generate(_slotCount, (index) {
-        final slot = slots['slot_$index'];
-        if (slot is Map<String, dynamic>) {
+      // 掲載枠の詳細から、TLと同じタイトル・タグ・投稿日を表示する。
+      final ideas = await Future.wait(
+        List.generate(_slotCount, (index) async {
+          final slot = slots['slot_$index'];
+          if (slot is! Map<String, dynamic>) return null;
+          final detail = await http
+              .get(
+                Uri.parse(
+                  '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/ideas/${slot['ideaId']}',
+                ),
+                headers: {'Authorization': 'Bearer $token'},
+              )
+              .timeout(const Duration(seconds: 30));
+          if (detail.statusCode != 200) {
+            throw StateError(_messageFromResponse(detail));
+          }
+          final data =
+              jsonDecode(utf8.decode(detail.bodyBytes)) as Map<String, dynamic>;
           return IdeaSlotData(
-            ideaId: slot['ideaId'] as String,
-            title: slot['title'] as String? ?? '掲載中',
-            expiresAt: DateTime.parse(slot['expiresAt'] as String),
+            ideaId: data['ideaId'] as String,
+            title: data['title'] as String,
+            createdAt: DateTime.parse(data['createdAt'] as String),
+            expiresAt: DateTime.parse(data['publishedUntil'] as String),
+            previewTags: (data['tags'] as List).cast<String>(),
           );
-        }
-        return null;
-      });
+        }),
+      );
       if (!mounted) return;
       setState(() {
         for (var index = 0; index < _slotCount; index++) {
@@ -287,237 +411,186 @@ class _IdeasScreenState extends State<IdeasScreen> {
         '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
-  void _onPointerDown(PointerDownEvent event) {
-    if (_activePointer != null) return;
-    setState(() {
-      _activePointer = event.pointer;
-      _touchOrigin = event.localPosition;
-      _pressedSlotIndex = _pageController.hasClients
-          ? _pageController.page?.round() ?? _currentPage
-          : _currentPage;
-      _hasDragged = false;
-    });
-  }
-
-  void _onPointerMove(PointerMoveEvent event) {
-    if (event.pointer != _activePointer) return;
-    final origin = _touchOrigin;
-    if (origin == null) return;
-    if (!_hasDragged && (event.localPosition - origin).distance < 4) return;
-    setState(() {
-      _hasDragged = true;
-      _updateRotation(event.localPosition);
-    });
-  }
-
-  void _onPointerEnd(PointerEvent event) {
-    if (event.pointer != _activePointer) return;
-    final origin = _touchOrigin;
-    final pressedSlotIndex = _pressedSlotIndex;
-    final isTap =
-        event is PointerUpEvent &&
-        !_hasDragged &&
-        origin != null &&
-        (event.localPosition - origin).distance < 4;
-    setState(() {
-      _activePointer = null;
-      _pressedSlotIndex = null;
-      _touchOrigin = null;
-      _hasDragged = false;
-      _rotationX = 0;
-    });
-    if (isTap &&
-        pressedSlotIndex != null &&
-        pressedSlotIndex >= 0 &&
-        pressedSlotIndex < _slotCount) {
-      final idea = _slotIdeas[pressedSlotIndex];
-      if (idea != null) {
-        _openDetail(idea, pressedSlotIndex);
-      } else if (!_isLoading) {
-        _openComposer(pressedSlotIndex);
-      }
-    }
-  }
-
-  void _updateRotation(Offset position) {
-    final size = _carouselGestureKey.currentContext?.size;
-    final origin = _touchOrigin;
-    if (size == null || origin == null || size.isEmpty) return;
-
-    final fingerY = (position.dy / size.height * 2 - 1).clamp(-1.0, 1.0);
-    final dragY = (position.dy - origin.dy) / size.height;
-    _rotationX = (fingerY * 0.035 + dragY * 0.08).clamp(-0.10, 0.10);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final occupiedCount = _occupiedCount;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxHeight < 520;
-        final scrollBehavior = ScrollConfiguration.of(context).copyWith(
-          dragDevices: {
-            ...ScrollConfiguration.of(context).dragDevices,
-            PointerDeviceKind.mouse,
-          },
-        );
-
-        return Padding(
-          padding: EdgeInsets.fromLTRB(16, compact ? 12 : 20, 16, 4),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 920),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'アイデア枠',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      Text(
-                        '掲載中 $occupiedCount / $_slotCount',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.muted,
-                        ),
-                      ),
-                    ],
+    final layout = PageLayout.of(context);
+    // TLと同じ縦一列の一覧にし、空き枠を含む五つのスロットを表示する。
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: layout.bodyWidth),
+        child: ListView(
+          padding: layout.insets,
+          children: [
+            // 二つのアイコンを一つのカプセルにまとめ、選択側を背景色で示す。
+            Align(
+              alignment: Alignment.centerRight,
+              child: SegmentedButton<bool>(
+                style: ButtonStyle(
+                  shape: WidgetStateProperty.all(const StadiumBorder()),
+                  minimumSize: WidgetStateProperty.all(const Size(56, 48)),
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.surface,
                   ),
-                  if (_isLoading) const LinearProgressIndicator(),
-                  if (_loadError != null)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _loadError!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: _isLoading ? null : _loadSlots,
-                          child: const Text('再試行'),
-                        ),
-                      ],
-                    ),
-                  SizedBox(height: compact ? 8 : 16),
-                  Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 620),
-                        child: Listener(
-                          key: _carouselGestureKey,
-                          behavior: HitTestBehavior.translucent,
-                          onPointerDown: _onPointerDown,
-                          onPointerMove: _onPointerMove,
-                          onPointerUp: _onPointerEnd,
-                          onPointerCancel: _onPointerEnd,
-                          child: AnimatedBuilder(
-                            animation: _pageController,
-                            builder: (context, child) {
-                              final page = _pageController.hasClients
-                                  ? _pageController.page ??
-                                        _currentPage.toDouble()
-                                  : _currentPage.toDouble();
-                              final pageIsMoving =
-                                  (page - page.roundToDouble()).abs() > 0.0001;
-                              return ScrollConfiguration(
-                                behavior: scrollBehavior,
-                                child: PageView.builder(
-                                  key: const ValueKey('idea-carousel'),
-                                  controller: _pageController,
-                                  physics: const PageScrollPhysics(
-                                    parent: BouncingScrollPhysics(),
-                                  ),
-                                  itemCount: _slotCount,
-                                  onPageChanged: (page) => setState(() {
-                                    _currentPage = page;
-                                  }),
-                                  itemBuilder: (context, index) {
-                                    final title = _slotIdeas[index]?.title;
-                                    final distance = (page - index).abs();
-                                    final tiltWeight = (1.0 - distance)
-                                        .clamp(0.0, 1.0)
-                                        .toDouble();
-                                    final pageOffset = (page - index)
-                                        .clamp(-1.0, 1.0)
-                                        .toDouble();
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 4,
-                                      ),
-                                      child: _TiltCard(
-                                        key: ValueKey(
-                                          'idea-tilt-card-${index + 1}',
-                                        ),
-                                        rotationX: _rotationX * tiltWeight,
-                                        rotationY: -pageOffset * 0.16,
-                                        isDragging:
-                                            (_activePointer != null ||
-                                                pageIsMoving) &&
-                                            tiltWeight > 0,
-                                        child: _IdeaSlotCard(
-                                          key: ValueKey(
-                                            'idea-slot-${index + 1}',
-                                          ),
-                                          slotNumber: index + 1,
-                                          title: title,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
+                ),
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: false,
+                    tooltip: '自分のアイデア',
+                    icon: Icon(
+                      _showBookmarks
+                          ? Icons.lightbulb_outline
+                          : Icons.lightbulb,
                     ),
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton.filledTonal(
-                        tooltip: '前のアイデア',
-                        onPressed: _currentPage == 0
-                            ? null
-                            : () => _moveToPage(_currentPage - 1),
-                        icon: const Icon(Icons.chevron_left),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Text(
-                          '${_currentPage + 1} / $_slotCount',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: '次のアイデア',
-                        onPressed: _currentPage == _slotCount - 1
-                            ? null
-                            : () => _moveToPage(_currentPage + 1),
-                        icon: const Icon(Icons.chevron_right),
-                      ),
-                    ],
+                  ButtonSegment(
+                    value: true,
+                    tooltip: 'ブックマーク',
+                    icon: Icon(
+                      _showBookmarks ? Icons.bookmark : Icons.bookmark_border,
+                    ),
                   ),
                 ],
+                selected: {_showBookmarks},
+                onSelectionChanged: (selection) {
+                  setState(() => _showBookmarks = selection.single);
+                  if (_showBookmarks) _loadBookmarks();
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_showBookmarks) ...[
+              if (_bookmarksLoading) const LinearProgressIndicator(),
+              if (_bookmarksError != null) ...[
+                Text(_bookmarksError!),
+                TextButton(onPressed: _loadBookmarks, child: const Text('再試行')),
+              ],
+              if (!_bookmarksLoading &&
+                  _bookmarksError == null &&
+                  _bookmarks.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'ブックマークしたアイデアはありません。',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              // 保存済みと空き枠を合わせ、常に五つのスロットを並べる。
+              for (var index = 0; index < _slotCount; index++) ...[
+                _buildBookmarkSlot(index),
+                if (index < _slotCount - 1) const SizedBox(height: 12),
+              ],
+            ] else ...[
+              if (_isLoading) const LinearProgressIndicator(),
+              if (_loadError != null) ...[
+                Text(_loadError!),
+                TextButton(
+                  onPressed: _isLoading ? null : _loadSlots,
+                  child: const Text('再試行'),
+                ),
+              ],
+              for (var index = 0; index < _slotCount; index++) ...[
+                _buildSlot(index),
+                if (index < _slotCount - 1) const SizedBox(height: 12),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookmarkSlot(int index) {
+    if (index < _bookmarks.length) {
+      final idea = _bookmarks[index];
+      return IdeaCard(
+        key: ValueKey('bookmark-slot-${index + 1}'),
+        title: idea['title'] as String,
+        // 他の人のお題は閲覧用詳細を開き、削除操作を渡さない。
+        onTap: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (context) => IdeaDetailScreen(
+              idea: IdeaSlotData(
+                ideaId: idea['ideaId'] as String,
+                title: idea['title'] as String,
+                expiresAt: DateTime.parse(idea['publishedUntil'] as String),
+                previewDescription: idea['description'] as String?,
+                previewTags: (idea['tags'] as List).cast<String>(),
+              ),
+              apiBaseUrl: widget.apiBaseUrl,
+              authenticated: widget.authenticated,
+              preview: _isPreview,
+              previewCanSubmit: idea['canSubmit'] == true,
+            ),
+          ),
+        ),
+        backgroundColor: idea['hasDrawn'] == true ? AppColors.drawnIdea : null,
+        borderColor: idea['hasDrawn'] == true ? AppColors.accentYellow : null,
+        tags: (idea['tags'] as List).cast<String>(),
+        date: DateTime.parse(idea['createdAt'] as String),
+        pinned: true,
+        onPinPressed: _removingBookmarks.contains(idea['ideaId'])
+            ? null
+            : () => _removeBookmark(idea['ideaId'] as String),
+      );
+    }
+    // 未保存のスロットはマークを置かず、空のカードだけを表示する。
+    return Card(
+      key: ValueKey('bookmark-slot-${index + 1}'),
+      margin: EdgeInsets.zero,
+      child: Semantics(
+        label: 'ブックマークの空き枠 ${index + 1}',
+        child: const SizedBox(height: 112),
+      ),
+    );
+  }
+
+  Widget _buildSlot(int index) {
+    final idea = _slotIdeas[index];
+    if (idea != null) {
+      return IdeaCard(
+        key: ValueKey('idea-slot-${index + 1}'),
+        title: idea.title,
+        backgroundColor: AppColors.ownIdea,
+        borderColor: AppColors.accentGreen,
+        tags: idea.previewTags,
+        date:
+            idea.createdAt ?? idea.expiresAt.subtract(const Duration(days: 7)),
+        showBookmark: false,
+        onTap: () => _openDetail(idea, index),
+      );
+    }
+    // 空き枠は中央の丸付きプラスだけにし、読み上げ用の説明を添える。
+    return Card(
+      key: ValueKey('idea-slot-${index + 1}'),
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Semantics(
+        label: '枠 ${index + 1}にアイデアを投稿',
+        button: true,
+        child: InkWell(
+          onTap: _isLoading ? null : () => _openComposer(index),
+          child: SizedBox(
+            height: 112,
+            child: Center(
+              child: Icon(
+                Icons.add_circle_outline,
+                size: 40,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-class _TiltCard extends StatelessWidget {
-  const _TiltCard({
+/// アイデア枠と受信箱で共用する、操作中の傾きと復帰モーション。
+class TiltCard extends StatelessWidget {
+  const TiltCard({
     super.key,
     required this.child,
     required this.rotationX,
@@ -532,26 +605,54 @@ class _TiltCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transform = Matrix4.identity()
-      ..setEntry(3, 2, 0.003)
-      ..rotateX(rotationX)
-      ..rotateY(rotationY);
-
-    return AnimatedContainer(
-      key: key == null
-          ? null
-          : ValueKey('${(key as ValueKey).value}-transform'),
+    // 行列の補間を避け、角度を補間して毎フレーム有限の行列を作る。
+    final target = Offset(
+      rotationX.isFinite ? rotationX : 0,
+      rotationY.isFinite ? rotationY : 0,
+    );
+    return TweenAnimationBuilder<Offset>(
+      tween: Tween<Offset>(begin: Offset.zero, end: target),
       duration: isDragging ? Duration.zero : const Duration(milliseconds: 440),
       curve: isDragging ? Curves.linear : Curves.easeOutBack,
-      transform: transform,
-      transformAlignment: Alignment.center,
       child: child,
+      builder: (context, angle, child) {
+        final transform = Matrix4.identity()
+          ..setEntry(3, 2, 0.003)
+          ..rotateX(angle.dx)
+          ..rotateY(angle.dy);
+        return Transform(
+          key: key == null
+              ? null
+              : ValueKey('${(key as ValueKey).value}-transform'),
+          transform: transform,
+          alignment: Alignment.center,
+          // 見た目だけ傾け、ポインターの座標変換へ透視行列を渡さない。
+          transformHitTests: false,
+          child: child,
+        );
+      },
     );
   }
 }
 
-class _IdeaSlotCard extends StatelessWidget {
-  const _IdeaSlotCard({super.key, required this.slotNumber, this.title});
+class IdeaSlotCard extends StatelessWidget {
+  const IdeaSlotCard({
+    super.key,
+    required this.slotNumber,
+    this.title,
+    this.label,
+    this.subtitle = 'TL掲載中',
+    this.emptyText = '空き枠',
+    this.icon = Icons.lightbulb_outline,
+    this.emptyIcon = Icons.add,
+  });
+
+  // 受信箱と見た目を共有し、画面ごとの文言とアイコンだけ変更する。
+  final String? label;
+  final String subtitle;
+  final String emptyText;
+  final IconData icon;
+  final IconData emptyIcon;
 
   final int slotNumber;
   final String? title;
@@ -561,7 +662,9 @@ class _IdeaSlotCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final isOccupied = title != null;
 
+    // 外側の比率指定をそのままカードの輪郭に反映する。
     return Card(
+      margin: EdgeInsets.zero,
       child: SizedBox.expand(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -578,7 +681,7 @@ class _IdeaSlotCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   child: Icon(
-                    isOccupied ? Icons.lightbulb_outline : Icons.add,
+                    isOccupied ? icon : emptyIcon,
                     color: colors.primary,
                   ),
                 ),
@@ -590,14 +693,14 @@ class _IdeaSlotCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '枠 $slotNumber',
+                      label ?? '枠 $slotNumber',
                       style: Theme.of(
                         context,
                       ).textTheme.labelMedium?.copyWith(color: AppColors.muted),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      title ?? '空き枠',
+                      title ?? emptyText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -607,7 +710,7 @@ class _IdeaSlotCard extends StatelessWidget {
                     if (isOccupied) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'TL掲載中',
+                        subtitle,
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
