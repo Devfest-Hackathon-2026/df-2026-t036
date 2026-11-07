@@ -41,6 +41,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   late final http.Client _client = widget.client ?? http.Client();
   List<ReceivedArtwork> _inbox = [];
   final _previewReadAt = <String, DateTime>{};
+  final _previewLikes = <String>{};
   String? _nextCursor;
   String? _error;
   bool _loading = false;
@@ -248,6 +249,40 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     return readAt;
   }
 
+  Future<void> _likeArtwork(ReceivedArtwork artwork) async {
+    final id = artwork.submissionId!;
+    if (_isPreview) {
+      setState(() => _previewLikes.add(id));
+      return;
+    }
+    final token = widget.idTokenProvider == null
+        ? await FirebaseAuth.instance.currentUser?.getIdToken()
+        : await widget.idTokenProvider!();
+    if (token == null || token.isEmpty) {
+      throw StateError('Missing authentication');
+    }
+    final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _client
+        .post(
+          Uri.parse('$base/api/v1/artworks/${Uri.encodeComponent(id)}/like'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) throw StateError('Unable to like artwork');
+    final body =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    if (body['submissionId'] != id || body['liked'] != true) {
+      throw StateError('Unexpected like response');
+    }
+    if (mounted) {
+      setState(() {
+        _inbox = _inbox
+            .map((item) => item.submissionId == id ? item.withLiked() : item)
+            .toList();
+      });
+    }
+  }
+
   Future<void> _openArtwork(ReceivedArtwork artwork) async {
     _detailOpen = true;
     _pause();
@@ -263,6 +298,10 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                   ),
                 )
               : null,
+          onLike: artwork.submissionId == null
+              ? null
+              : () => _likeArtwork(artwork),
+          allowFileActions: _isPreview,
           onMarkRead: artwork.submissionId == null
               ? null
               : () => _markArtworkRead(artwork),
@@ -411,7 +450,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           artistNickname: '描き手 ${index + 1}',
           createdAt: receivedAt,
           expiresAt: receivedAt.add(const Duration(days: 7)),
-          liked: index == 1,
+          liked: index == 1 || _previewLikes.contains('preview-artwork-$index'),
         );
       });
     }

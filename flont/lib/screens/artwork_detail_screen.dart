@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../models/received_artwork.dart';
 import '../theme/page_layout.dart';
+import '../widgets/artwork_actions.dart';
+import '../services/artwork_file_actions.dart';
 
 class ArtworkDetailScreen extends StatefulWidget {
   const ArtworkDetailScreen({
@@ -13,12 +15,18 @@ class ArtworkDetailScreen extends StatefulWidget {
     this.imageLoader,
     this.onMarkRead,
     this.now,
+    this.onLike,
+    this.allowFileActions = false,
+    this.onSave,
   });
 
   final ReceivedArtwork artwork;
   final Future<Uint8List> Function()? imageLoader;
   final Future<DateTime> Function()? onMarkRead;
   final DateTime Function()? now;
+  final Future<void> Function()? onLike;
+  final bool allowFileActions;
+  final Future<void> Function(Uint8List bytes)? onSave;
 
   @override
   State<ArtworkDetailScreen> createState() => _ArtworkDetailScreenState();
@@ -32,6 +40,11 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
   bool _loadingImage = false;
   bool _imageVisible = false;
   bool _reading = false;
+  bool _acting = false;
+  late bool _liked = artwork.liked == true;
+  String? _actionError;
+  bool get _canAct => !_expired && _imageVisible && _bytes != null && !_acting;
+
   bool _expired = false;
   String? _imageError;
   String? _readError;
@@ -128,6 +141,47 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
     }
   }
 
+  Future<void> _like() async {
+    if (!_canAct || _liked || widget.onLike == null) return;
+    setState(() {
+      _acting = true;
+      _actionError = null;
+    });
+    try {
+      await widget.onLike!();
+      if (mounted && !_expired) setState(() => _liked = true);
+    } catch (_) {
+      if (mounted) setState(() => _actionError = 'いいねを送れませんでした。再度お試しください。');
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _saveImage() async {
+    if (!_canAct || !widget.allowFileActions) return;
+    final bytes = _bytes!;
+    setState(() {
+      _acting = true;
+      _actionError = null;
+    });
+    try {
+      if (widget.onSave != null) {
+        await widget.onSave!(bytes);
+      } else {
+        await saveArtworkFile(bytes, 'artwork.png');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('画像の保存を開始しました')));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _actionError = '画像を保存できませんでした。');
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
   Widget _image() {
     Widget content;
     if (_expired) {
@@ -147,7 +201,10 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
           if (frame != null && !_imageVisible) {
             _imageVisible = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_expired) _markRead();
+              if (mounted && !_expired) {
+                setState(() {});
+                _markRead();
+              }
             });
           }
           return frame == null
@@ -211,7 +268,22 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
             children: [
               Text(artwork.title, style: textTheme.headlineSmall),
               const SizedBox(height: 16),
-              _image(),
+              ArtworkActions(
+                liked: _liked,
+                onLike: _canAct && !_liked && widget.onLike != null
+                    ? _like
+                    : null,
+                onSave: _canAct && widget.allowFileActions ? _saveImage : null,
+                child: _image(),
+              ),
+              const SizedBox(height: 8),
+              const Text('いいねは取り消せません。', textAlign: TextAlign.center),
+              if (_acting) const LinearProgressIndicator(),
+              if (_actionError != null)
+                Text(
+                  _actionError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               if (_readError != null && !_expired)
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -240,9 +312,9 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
                       _info(
                         context,
                         'いいね',
-                        artwork.liked == null
+                        artwork.liked == null && !_liked
                             ? '未取得'
-                            : artwork.liked!
+                            : _liked
                             ? 'いいね済み'
                             : '未送信',
                       ),

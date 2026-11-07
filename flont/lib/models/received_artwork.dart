@@ -48,6 +48,20 @@ class ReceivedArtwork {
     liked: liked,
   );
 
+  ReceivedArtwork withLiked() => ReceivedArtwork(
+    title: title,
+    submissionId: submissionId,
+    artistId: artistId,
+    sourceIdeaId: sourceIdeaId,
+    readAt: readAt,
+    description: description,
+    tags: tags,
+    artistNickname: artistNickname,
+    createdAt: createdAt,
+    expiresAt: expiresAt,
+    liked: true,
+  );
+
   final String? submissionId;
   final String? artistId;
   final String? sourceIdeaId;

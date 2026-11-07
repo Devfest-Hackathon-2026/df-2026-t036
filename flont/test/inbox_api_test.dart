@@ -69,6 +69,7 @@ void main() {
         await tester.drag(find.byType(ListView), const Offset(0, -700));
         await tester.pumpAndSettle();
         expect(find.text('Artist'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Snapshot description'), 200);
         expect(find.text('Snapshot description'), findsOneWidget);
         expect(find.text('tag'), findsOneWidget);
         expect(paths, ['/api/v1/me/artworks/inbox']);
