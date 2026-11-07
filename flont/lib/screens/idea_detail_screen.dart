@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../theme/app_theme.dart';
+import '../theme/page_layout.dart';
 
 class IdeaSlotData {
   const IdeaSlotData({
@@ -12,11 +13,14 @@ class IdeaSlotData {
     required this.title,
     required this.expiresAt,
     this.previewDescription,
+    this.createdAt,
     this.previewTags = const [],
   });
 
   final String ideaId;
   final String title;
+  // 一覧APIが返す実際の投稿日をカードへ渡す。
+  final DateTime? createdAt;
   final DateTime expiresAt;
   final String? previewDescription;
   final List<String> previewTags;
@@ -28,15 +32,19 @@ class IdeaDetailScreen extends StatefulWidget {
     required this.idea,
     required this.apiBaseUrl,
     required this.authenticated,
-    required this.onDelete,
+    this.onDelete,
     this.preview = false,
+    this.previewCanSubmit = false,
   });
 
   final IdeaSlotData idea;
   final String apiBaseUrl;
   final bool authenticated;
-  final Future<void> Function() onDelete;
+  // 自分のお題を開く場合だけ削除処理を受け取る。
+  final Future<void> Function()? onDelete;
   final bool preview;
+  // プレビューでも、未描画で受付可能なお題だけ送信ボタンを表示する。
+  final bool previewCanSubmit;
 
   @override
   State<IdeaDetailScreen> createState() => _IdeaDetailScreenState();
@@ -49,12 +57,15 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
   late DateTime _publishedUntil = widget.idea.expiresAt;
   bool _loading = true;
   bool _deleting = false;
+  bool _isOwn = false;
+  bool _canSubmit = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     if (widget.preview) {
+      _canSubmit = widget.previewCanSubmit;
       _description = widget.idea.previewDescription ?? '';
       _tags = widget.idea.previewTags;
       _loading = false;
@@ -74,6 +85,8 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
 
     setState(() {
       _loading = true;
+      // 再取得中は古い送信可否を使わない。
+      _canSubmit = false;
       _error = null;
     });
     try {
@@ -97,6 +110,10 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (!mounted) return;
       setState(() {
+        _isOwn = idea['isOwn'] == true;
+        // 色ではなく、サーバーの所有者・履歴・受付条件で送信可否を決める。
+        _canSubmit =
+            idea['canSubmit'] == true && !_isOwn && idea['hasDrawn'] != true;
         _title = idea['title'] as String;
         _description = idea['description'] as String;
         _tags = (idea['tags'] as List<dynamic>).cast<String>();
@@ -142,6 +159,7 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
   }
 
   Future<void> _confirmDelete() async {
+    if (widget.onDelete == null || (!widget.preview && !_isOwn)) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -170,7 +188,7 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
       _error = null;
     });
     try {
-      await widget.onDelete();
+      await widget.onDelete!();
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
@@ -186,15 +204,17 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 一覧と同じ三段階の幅・余白を詳細画面にも適用する。
+    final layout = PageLayout.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('アイデア詳細')),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
+          constraints: BoxConstraints(maxWidth: layout.bodyWidth),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            padding: layout.insets,
             children: [
               if (_loading) const LinearProgressIndicator(),
               if (_error != null) ...[
@@ -245,21 +265,44 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
                   children: [for (final tag in _tags) Chip(label: Text(tag))],
                 ),
               ],
-              const SizedBox(height: 28),
-              OutlinedButton.icon(
-                key: const ValueKey('idea-delete-button'),
-                onPressed: _deleting ? null : _confirmDelete,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
+              if (_canSubmit && !_loading && _error == null) ...[
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  key: const ValueKey('idea-send-artwork-button'),
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('イラストを送る'),
+                  // 送信API実装までは送信成功を装わず、準備中と案内する。
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('イラストを送る'),
+                      content: const Text('イラストの送信機能は準備中です。'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('閉じる'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                icon: _deleting
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.delete_outline),
-                label: Text(_deleting ? '削除中…' : 'アイデアを削除'),
-              ),
+              ],
+              const SizedBox(height: 28),
+              if (widget.onDelete != null && (widget.preview || _isOwn))
+                OutlinedButton.icon(
+                  key: const ValueKey('idea-delete-button'),
+                  onPressed: _deleting ? null : _confirmDelete,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  icon: _deleting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline),
+                  label: Text(_deleting ? '削除中…' : 'アイデアを削除'),
+                ),
             ],
           ),
         ),

@@ -4,6 +4,16 @@ import 'package:google_fonts/google_fonts.dart';
 /// EOCURUの配色を一元管理し、独自描画の装飾でも同じ色を使う。
 abstract final class AppColors {
   static const main = Color(0xFFC7EDFF);
+  // 共通アクセント二色。枠線は既存のoutlineと彩度・明度をそろえる。
+  static final accentGreen = HSLColor.fromColor(outline).withHue(140).toColor();
+  static final accentYellow = HSLColor.fromColor(outline).withHue(48).toColor();
+  // 背景には同じアクセントの色相と、メイン色の明るさを使用する。
+  static final ownIdea = HSLColor.fromColor(
+    main,
+  ).withHue(HSLColor.fromColor(accentGreen).hue).toColor();
+  static final drawnIdea = HSLColor.fromColor(
+    main,
+  ).withHue(HSLColor.fromColor(accentYellow).hue).toColor();
   static const sub = Color(0xFF173C70);
   static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFF7FBFF);

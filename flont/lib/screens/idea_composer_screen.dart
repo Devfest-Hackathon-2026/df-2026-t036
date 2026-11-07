@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/page_layout.dart';
 
 class IdeaDraft {
   const IdeaDraft({
@@ -95,12 +96,14 @@ class _IdeaComposerScreenState extends State<IdeaComposerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 入力と投稿前確認を、一覧・詳細と同じ共通幅にそろえる。
+    final layout = PageLayout.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(_showPreview ? '投稿内容の確認' : 'アイデアを作成')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
+            constraints: BoxConstraints(maxWidth: layout.bodyWidth),
             child: _showPreview ? _buildPreview(context) : _buildForm(context),
           ),
         ),
@@ -112,7 +115,7 @@ class _IdeaComposerScreenState extends State<IdeaComposerScreen> {
     return Form(
       key: _formKey,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        padding: PageLayout.of(context).insets,
         children: [
           Text('描いてほしいアイデア', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
@@ -223,7 +226,7 @@ class _IdeaComposerScreenState extends State<IdeaComposerScreen> {
 
   Widget _buildPreview(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      padding: PageLayout.of(context).insets,
       children: [
         Card(
           child: Padding(

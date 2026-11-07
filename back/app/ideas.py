@@ -66,6 +66,9 @@ class Idea(ApiModel):
     acceptUntil: UtcDatetime
     canPin: bool
     canSubmit: bool
+    # 一覧の色分けに使い、送信可否とは分けて本人・描画履歴を示す。
+    isOwn: bool = False
+    hasDrawn: bool = False
 
 
 class IdeaPage(Page[Idea]):
@@ -255,6 +258,8 @@ def _idea_dto(
         acceptUntil=accept_until,
         canPin=can_pin,
         canSubmit=can_submit,
+        isOwn=owner_id == viewer_uid,
+        hasDrawn=idea_id in drawn_ids,
     )
 
 

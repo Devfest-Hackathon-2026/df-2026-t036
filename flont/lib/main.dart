@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
 import 'auth_gate.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_scroll_behavior.dart';
 
 const _developmentPreview = bool.fromEnvironment('DEV_PREVIEW');
 
@@ -24,6 +25,8 @@ class IllustrationExchangeApp extends StatelessWidget {
       title: 'EOCURU',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      // 一覧や遷移先も含め、スクロール操作とバーの表示方針を統一する。
+      scrollBehavior: const AppScrollBehavior(),
       // 開発プレビューはデバッグ時だけ有効にし、通常は認証画面から開始する。
       home:
           home ??

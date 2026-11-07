@@ -26,8 +26,14 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
   List<Widget> get _pages => [
-    TimelineScreen(),
+    // 一覧にもログイン済み状態と共通のAPI接続先を渡す。
+    TimelineScreen(
+      active: _selectedIndex == 0,
+      apiBaseUrl: widget.apiBaseUrl,
+      authenticated: widget.me != null,
+    ),
     IdeasScreen(
+      active: _selectedIndex == 1,
       apiBaseUrl: widget.apiBaseUrl,
       authenticated: widget.me != null,
     ),
