@@ -1,20 +1,279 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
+import 'artwork_detail_screen.dart';
+import '../models/received_artwork.dart';
+import '../preview/artwork_preview.dart';
 
 class InboxScreen extends StatefulWidget {
-  const InboxScreen({super.key, this.artworkTitles = const []});
+  const InboxScreen({
+    super.key,
+    this.artworkTitles = const [],
+    this.artworks = const [],
+    this.apiBaseUrl = 'http://localhost:8080',
+    this.authenticated = false,
+    this.active = true,
+    this.client,
+    this.idTokenProvider,
+  });
 
   // 実データの接続時は受信作品のタイトルを渡せる。
   final List<String> artworkTitles;
+  final List<ReceivedArtwork> artworks;
+  final String apiBaseUrl;
+  final bool authenticated;
+  final bool active;
+  final http.Client? client;
+  final Future<String?> Function()? idTokenProvider;
 
   @override
   State<InboxScreen> createState() => _InboxScreenState();
 }
 
-class _InboxScreenState extends State<InboxScreen> {
+class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
+  late final http.Client _client = widget.client ?? http.Client();
+  List<ReceivedArtwork> _inbox = [];
+  final _previewReadAt = <String, DateTime>{};
+  String? _nextCursor;
+  String? _error;
+  bool _loading = false;
+  bool _retryAppend = false;
+  bool _detailOpen = false;
+  int _generation = 0;
+  int _failures = 0;
+  Duration? _retryAfter;
+  Timer? _refreshTimer;
+  Timer? _expiryTimer;
+  Duration _clockOffset = Duration.zero;
+  AppLifecycleState _lifecycle = AppLifecycleState.resumed;
+
+  bool get _isPreview =>
+      kDebugMode && const bool.fromEnvironment('DEV_PREVIEW');
+  bool get _canFetch =>
+      mounted &&
+      widget.active &&
+      widget.authenticated &&
+      !_isPreview &&
+      !_detailOpen &&
+      _lifecycle == AppLifecycleState.resumed;
+  DateTime get _now => DateTime.now().add(_clockOffset);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _lifecycle =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
+    if (_canFetch) _loadInbox();
+  }
+
+  void _pause() {
+    _generation++;
+    _loading = false;
+    _refreshTimer?.cancel();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycle = state;
+    if (state == AppLifecycleState.resumed) {
+      if (_canFetch) _loadInbox();
+    } else {
+      _pause();
+    }
+  }
+
+  void _resetPage() {
+    _page = 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _controller.hasClients) _controller.jumpToPage(0);
+    });
+  }
+
+  void _scheduleExpiry() {
+    _expiryTimer?.cancel();
+    final dates =
+        _inbox
+            .map((item) => item.expiresAt!)
+            .where((date) => date.isAfter(_now))
+            .toList()
+          ..sort();
+    if (dates.isEmpty) return;
+    _expiryTimer = Timer(
+      dates.first.difference(_now) + const Duration(milliseconds: 1),
+      () {
+        if (!mounted) return;
+        setState(() {
+          _inbox.removeWhere((item) => !item.expiresAt!.isAfter(_now));
+          _resetPage();
+        });
+        _scheduleExpiry();
+      },
+    );
+  }
+
+  Future<void> _loadInbox({bool append = false}) async {
+    if (!_canFetch || _loading || (append && _nextCursor == null)) return;
+    final generation = ++_generation;
+    _refreshTimer?.cancel();
+    setState(() {
+      _loading = true;
+      _error = null;
+      _retryAppend = append;
+      _retryAfter = null;
+    });
+    try {
+      final token = widget.idTokenProvider == null
+          ? await FirebaseAuth.instance.currentUser?.getIdToken()
+          : await widget.idTokenProvider!();
+      if (token == null || token.isEmpty) throw StateError('再度ログインしてください。');
+      if (!mounted || generation != _generation) return;
+      final uri =
+          Uri.parse(
+            '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/me/artworks/inbox',
+          ).replace(
+            queryParameters: {
+              'limit': '20',
+              if (append) 'cursor': _nextCursor!,
+            },
+          );
+      final response = await _client
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 30));
+      if (!mounted || generation != _generation) return;
+      if (response.statusCode != 200) {
+        final seconds = int.tryParse(response.headers['retry-after'] ?? '');
+        if (seconds != null && seconds > 0) {
+          _retryAfter = Duration(seconds: seconds);
+        }
+        var message = '受信作品を読み込めませんでした。';
+        try {
+          final body =
+              jsonDecode(utf8.decode(response.bodyBytes))
+                  as Map<String, dynamic>;
+          message =
+              (body['error'] as Map<String, dynamic>)['message'] as String;
+        } catch (_) {}
+        throw StateError(message);
+      }
+      final body =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final items = (body['items'] as List)
+          .map((item) => ReceivedArtwork.fromJson(item as Map<String, dynamic>))
+          .toList();
+      final serverTime = DateTime.parse(body['serverTime'] as String);
+      final nextCursor = body['nextCursor'] as String?;
+      setState(() {
+        _clockOffset = serverTime.difference(DateTime.now());
+        final combined = append ? [..._inbox, ...items] : items;
+        _inbox = {
+          for (final item in combined)
+            if (item.expiresAt!.isAfter(_now)) item.submissionId: item,
+        }.values.toList();
+        _nextCursor = nextCursor;
+        _failures = 0;
+        if (!append) _resetPage();
+      });
+      _scheduleExpiry();
+    } catch (error) {
+      if (mounted && generation == _generation) {
+        setState(() {
+          _failures++;
+          _error = error is StateError
+              ? error.message.toString()
+              : '読み込みに失敗しました。';
+        });
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _loading = false);
+        if (_canFetch) {
+          final multiplier = 1 << _failures.clamp(0, 3);
+          final backoff = Duration(seconds: 180 * multiplier);
+          _refreshTimer = Timer(
+            _retryAfter != null && _retryAfter! > backoff
+                ? _retryAfter!
+                : backoff,
+            _loadInbox,
+          );
+        }
+      }
+    }
+  }
+
+  Future<DateTime> _markArtworkRead(ReceivedArtwork artwork) async {
+    final id = artwork.submissionId!;
+    if (_isPreview) {
+      final readAt = _previewReadAt.putIfAbsent(id, () => _now);
+      if (mounted) setState(() {});
+      return readAt;
+    }
+    final token = widget.idTokenProvider == null
+        ? await FirebaseAuth.instance.currentUser?.getIdToken()
+        : await widget.idTokenProvider!();
+    if (token == null || token.isEmpty) {
+      throw StateError('Missing authentication');
+    }
+    final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _client
+        .post(
+          Uri.parse('$base/api/v1/artworks/${Uri.encodeComponent(id)}/read'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw StateError('Unable to mark artwork read');
+    }
+    final body =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    if (body['submissionId'] != id) throw StateError('Unexpected artwork');
+    final readAt = DateTime.parse(body['readAt'] as String);
+    if (mounted) {
+      setState(() {
+        _inbox = _inbox
+            .map(
+              (item) =>
+                  item.submissionId == id ? item.withReadAt(readAt) : item,
+            )
+            .toList();
+      });
+    }
+    return readAt;
+  }
+
+  Future<void> _openArtwork(ReceivedArtwork artwork) async {
+    _detailOpen = true;
+    _pause();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ArtworkDetailScreen(
+          artwork: artwork,
+          now: () => _now,
+          imageLoader: _isPreview
+              ? () => createPreviewArtwork(
+                  _artworks.indexWhere(
+                    (item) => item.submissionId == artwork.submissionId,
+                  ),
+                )
+              : null,
+          onMarkRead: artwork.submissionId == null
+              ? null
+              : () => _markArtworkRead(artwork),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _detailOpen = false;
+    if (_canFetch) _loadInbox();
+  }
+
   final _controller = PageController();
   int _page = 0;
   final _gestureKey = GlobalKey();
@@ -103,13 +362,19 @@ class _InboxScreenState extends State<InboxScreen> {
                     rotationX: _rotationX * weight,
                     rotationY: -offset * 0.16,
                     isDragging: (_pointer != null || moving) && weight > 0,
-                    child: _fitCard(
-                      IdeaSlotCard(
-                        slotNumber: index + 1,
-                        label: '受信作品 ${index + 1}',
-                        title: titles[index],
-                        subtitle: '届いたイラスト',
-                        icon: Icons.image_outlined,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _openArtwork(_artworks[index]),
+                      child: _fitCard(
+                        IdeaSlotCard(
+                          slotNumber: index + 1,
+                          label: '受信作品 ${index + 1}',
+                          title: titles[index],
+                          subtitle: _artworks[index].readAt == null
+                              ? '未読'
+                              : '既読',
+                          icon: Icons.image_outlined,
+                        ),
                       ),
                     ),
                   ),
@@ -123,13 +388,49 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   // デバッグプレビューでだけ複数作品の配置を確認する。
+  late final _previewReceivedAt = DateTime.now().subtract(
+    const Duration(hours: 2),
+  );
+
+  List<ReceivedArtwork> get _artworks {
+    if (kDebugMode && const bool.fromEnvironment('DEV_PREVIEW')) {
+      const titles = ['夜明けを待つ庭', '旅する小さな天文台', '月明かりと青い花'];
+      const descriptions = [
+        '青い花が咲く庭に、朝日が差し込む景色。',
+        '山の上を旅する、小さな天文台の物語。',
+        '月明かりに照らされた青い花を描いてほしいです。',
+      ];
+      return List.generate(titles.length, (index) {
+        final receivedAt = _previewReceivedAt.subtract(Duration(days: index));
+        return ReceivedArtwork(
+          submissionId: 'preview-artwork-$index',
+          readAt: _previewReadAt['preview-artwork-$index'],
+          title: titles[index],
+          description: descriptions[index],
+          tags: const ['風景', 'ファンタジー'],
+          artistNickname: '描き手 ${index + 1}',
+          createdAt: receivedAt,
+          expiresAt: receivedAt.add(const Duration(days: 7)),
+          liked: index == 1,
+        );
+      });
+    }
+    if (widget.authenticated) return _inbox;
+    if (widget.artworks.isNotEmpty) return widget.artworks;
+    return widget.artworkTitles
+        .map((title) => ReceivedArtwork(title: title))
+        .toList();
+  }
+
   List<String> get _titles =>
-      kDebugMode && const bool.fromEnvironment('DEV_PREVIEW')
-      ? const ['夜明けを待つ庭', '旅する小さな天文台', '月明かりと青い花']
-      : widget.artworkTitles;
+      _artworks.map((artwork) => artwork.title).toList();
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
+    _expiryTimer?.cancel();
+    if (widget.client == null) _client.close();
     _controller.dispose();
     super.dispose();
   }
@@ -137,6 +438,20 @@ class _InboxScreenState extends State<InboxScreen> {
   @override
   void didUpdateWidget(covariant InboxScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.apiBaseUrl != widget.apiBaseUrl ||
+        oldWidget.authenticated != widget.authenticated) {
+      _pause();
+      _expiryTimer?.cancel();
+      _inbox = [];
+      _nextCursor = null;
+      _error = null;
+      _clockOffset = Duration.zero;
+      _resetPage();
+      if (_canFetch) _loadInbox();
+    } else if (oldWidget.active != widget.active) {
+      _pause();
+      if (_canFetch) _loadInbox();
+    }
     if (_page >= _titles.length) {
       _page = 0;
       if (_controller.hasClients) _controller.jumpToPage(0);
@@ -174,10 +489,36 @@ class _InboxScreenState extends State<InboxScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '受信箱',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '受信箱',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                        ),
+                        if (widget.authenticated && !_isPreview)
+                          IconButton(
+                            tooltip: '受信箱を更新',
+                            onPressed: _loading ? null : _loadInbox,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                      ],
                     ),
+                    if (_loading) const LinearProgressIndicator(),
+                    if (_error != null)
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(_error!),
+                          TextButton(
+                            onPressed: _loading
+                                ? null
+                                : () => _loadInbox(append: _retryAppend),
+                            child: const Text('再試行'),
+                          ),
+                        ],
+                      ),
                     SizedBox(height: headingGap),
                     Expanded(
                       child: ClipRect(
@@ -196,7 +537,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                 aspectRatio: 3 / 4,
                                 child: titles.isEmpty
                                     ? _fitCard(
-                                        const Padding(
+                                        Padding(
                                           padding: EdgeInsets.symmetric(
                                             horizontal: 0,
                                             vertical: 0,
@@ -204,7 +545,11 @@ class _InboxScreenState extends State<InboxScreen> {
                                           child: IdeaSlotCard(
                                             slotNumber: 1,
                                             label: '受信作品',
-                                            emptyText: 'まだ作品は届いていません',
+                                            emptyText: _loading
+                                                ? '読み込み中…'
+                                                : _error != null
+                                                ? '受信作品を表示できません'
+                                                : 'まだ作品は届いていません',
                                             emptyIcon: Icons.inbox_outlined,
                                           ),
                                         ),
@@ -217,6 +562,15 @@ class _InboxScreenState extends State<InboxScreen> {
                         ),
                       ),
                     ),
+                    if (_nextCursor != null &&
+                        widget.authenticated &&
+                        !_isPreview)
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () => _loadInbox(append: true),
+                        child: const Text('さらに読み込む'),
+                      ),
                     if (titles.length > 1) ...[
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,

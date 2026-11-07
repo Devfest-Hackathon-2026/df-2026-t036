@@ -37,7 +37,11 @@ class _MainScreenState extends State<MainScreen> {
       apiBaseUrl: widget.apiBaseUrl,
       authenticated: widget.me != null,
     ),
-    InboxScreen(),
+    InboxScreen(
+      active: _selectedIndex == 2,
+      authenticated: widget.me != null,
+      apiBaseUrl: widget.apiBaseUrl,
+    ),
     ProfileScreen(me: widget.me, googleEmail: widget.googleEmail),
   ];
 
