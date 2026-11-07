@@ -14,6 +14,13 @@ abstract final class AppColors {
   static final drawnIdea = HSLColor.fromColor(
     main,
   ).withHue(HSLColor.fromColor(accentYellow).hue).toColor();
+  // Stable tag colors derived from the shared brand palette.
+  static final tagBackgrounds = <Color>[
+    main,
+    HSLColor.fromColor(main).withHue(145).toColor(),
+    HSLColor.fromColor(main).withHue(38).toColor(),
+    HSLColor.fromColor(main).withHue(275).toColor(),
+  ];
   static const sub = Color(0xFF173C70);
   static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFF7FBFF);
