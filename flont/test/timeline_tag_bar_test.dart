@@ -37,6 +37,8 @@ void main() {
           ),
         ),
       );
+      expect(find.byTooltip('前のタグ'), findsOneWidget);
+      expect(find.byTooltip('次のタグ'), findsOneWidget);
       await tester.pumpAndSettle();
       final all = tester.getRect(
         find.byKey(const ValueKey('timeline-tag-all')),
@@ -148,8 +150,8 @@ void main() {
         final textRect = tester.getRect(text);
         expect(textRect.left, greaterThanOrEqualTo(buttonRect.left + 16));
         expect(textRect.right, lessThanOrEqualTo(buttonRect.right - 16));
-        expect(textRect.top, greaterThanOrEqualTo(buttonRect.top + 10));
-        expect(textRect.bottom, lessThanOrEqualTo(buttonRect.bottom - 10));
+        expect(textRect.top, greaterThanOrEqualTo(buttonRect.top + 5));
+        expect(textRect.bottom, lessThanOrEqualTo(buttonRect.bottom - 5));
       }
       expect(tester.takeException(), isNull);
     },

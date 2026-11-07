@@ -63,99 +63,106 @@ class _TimelineTagBarState extends State<TimelineTagBar> {
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateButtons());
-    return Row(
+    return Stack(
+      alignment: Alignment.center,
       children: [
-        IconButton(
-          tooltip: '前のタグ',
-          onPressed: _canBack ? () => _move(-1) : null,
-          icon: const Icon(Icons.chevron_left),
-        ),
-        Expanded(
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(context).copyWith(
-              dragDevices: {
-                ...ScrollConfiguration.of(context).dragDevices,
-                PointerDeviceKind.mouse,
-              },
-            ),
-            child: SingleChildScrollView(
-              key: const ValueKey('timeline-tag-scroll'),
-              controller: _controller,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var index = -1; index < widget.tags.length; index++) ...[
-                    if (index >= 0) const SizedBox(width: 8),
-                    Builder(
-                      builder: (context) {
-                        final tag = index < 0 ? null : widget.tags[index];
-                        final selected = widget.selectedTag == tag;
-                        final background = selected
-                            ? AppColors.sub
-                            : index < 0
-                            ? AppColors.main
-                            : AppColors.tagBackgrounds[index %
-                                  AppColors.tagBackgrounds.length];
-                        // Use the text's natural width and height, including CJK glyphs.
-                        return Semantics(
-                          key: ValueKey('timeline-tag-${tag ?? 'all'}'),
-                          selected: selected,
-                          button: true,
-                          child: Material(
-                            color: background,
-                            shape: StadiumBorder(
-                              side: BorderSide(
-                                color: selected
-                                    ? AppColors.sub
-                                    : AppColors.outline,
-                              ),
+        ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              ...ScrollConfiguration.of(context).dragDevices,
+              PointerDeviceKind.mouse,
+            },
+          ),
+          child: SingleChildScrollView(
+            key: const ValueKey('timeline-tag-scroll'),
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var index = -1; index < widget.tags.length; index++) ...[
+                  if (index >= 0) const SizedBox(width: 10),
+                  Builder(
+                    builder: (context) {
+                      final tag = index < 0 ? null : widget.tags[index];
+                      final selected = widget.selectedTag == tag;
+                      final background = selected
+                          ? AppColors.sub
+                          : index < 0
+                          ? AppColors.main
+                          : AppColors.tagBackgrounds[index %
+                                AppColors.tagBackgrounds.length];
+                      // Use the text's natural width and height, including CJK glyphs.
+                      return Semantics(
+                        key: ValueKey('timeline-tag-${tag ?? 'all'}'),
+                        selected: selected,
+                        button: true,
+                        child: Material(
+                          color: background,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            side: BorderSide(
+                              color: selected
+                                  ? AppColors.sub
+                                  : AppColors.outline,
                             ),
-                            clipBehavior: Clip.antiAlias,
-                            child: InkWell(
-                              customBorder: const StadiumBorder(),
-                              onTap: () =>
-                                  widget.onSelected(selected ? null : tag),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  minHeight: 48,
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            customBorder: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            onTap: () =>
+                                widget.onSelected(selected ? null : tag),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 36),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 6,
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 12,
-                                  ),
-                                  child: Text(
-                                    tag == null ? 'すべて' : '#$tag',
-                                    softWrap: false,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          height: 1.5,
-                                          color: selected
-                                              ? AppColors.background
-                                              : AppColors.sub,
-                                        ),
-                                  ),
+                                child: Text(
+                                  tag == null ? 'すべて' : '#$tag',
+                                  softWrap: false,
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(
+                                        height: 1.5,
+                                        color: selected
+                                            ? AppColors.background
+                                            : AppColors.sub,
+                                      ),
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ],
+                        ),
+                      );
+                    },
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
-        IconButton(
-          tooltip: '次のタグ',
-          onPressed: _canNext ? () => _move(1) : null,
-          icon: const Icon(Icons.chevron_right),
-        ),
+        Positioned(left: 0, child: _arrow(back: true)),
+        Positioned(right: 0, child: _arrow(back: false)),
       ],
     );
   }
+
+  Widget _arrow({required bool back}) => IconButton(
+    style: IconButton.styleFrom(
+      backgroundColor: AppColors.main,
+      disabledBackgroundColor: AppColors.main,
+      disabledForegroundColor: AppColors.muted,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: AppColors.sub,
+      shape: const CircleBorder(),
+      side: const BorderSide(color: AppColors.outline),
+      minimumSize: const Size(36, 36),
+      padding: const EdgeInsets.all(6),
+    ),
+    tooltip: back ? '前のタグ' : '次のタグ',
+    onPressed: (back ? _canBack : _canNext) ? () => _move(back ? -1 : 1) : null,
+    icon: Icon(back ? Icons.chevron_left : Icons.chevron_right),
+  );
 }
