@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:illustration_exchange/screens/artwork_composer_screen.dart';
+import 'artwork_image_format_test.dart' show heifHeader;
 
 Future<Uint8List> samplePng() async {
   // 実際にデコードできる小さな画像をメモリ内で作り、外部ファイルに依存しない。
@@ -63,7 +64,7 @@ void main() {
       );
       await tester.tap(find.text('イラストを選択'));
       await tester.pumpAndSettle();
-      expect(find.text('PNG・JPEGの画像を選択してください。'), findsOneWidget);
+      expect(find.text('PNG・JPEG・WebP・HEIC/HEIFの画像を選択してください。'), findsOneWidget);
       expect(find.byKey(const ValueKey('artwork-preview')), findsNothing);
       expect(
         tester
@@ -219,7 +220,82 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('イラストを選択'));
     await tester.pumpAndSettle();
-    expect(find.text('PNG・JPEGの画像を選択してください。'), findsOneWidget);
+    expect(find.text('PNG・JPEG・WebP・HEIC/HEIFの画像を選択してください。'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('artwork-send-demo')))
+          .onPressed,
+      isNull,
+    );
+  });
+  testWidgets(
+    'HEIF without browser decoding is selected but cannot be submitted unseen',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ArtworkComposerScreen(
+            ideaId: 'idea',
+            ideaTitle: 'お題',
+            ideaCreatedAt: DateTime(2026, 11, 7),
+            pickImage: () async => XFile.fromData(
+              heifHeader(),
+              name: 'drawing.heic',
+              path: 'drawing.heic',
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('イラストを選択'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('drawing.heic'), findsOneWidget);
+      expect(find.textContaining('このHEIC/HEIFはブラウザで表示できません'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('artwork-send-demo')),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+  testWidgets('rejecting a replacement clears the previously selected image', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final png = await tester.runAsync(samplePng);
+    var picks = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ArtworkComposerScreen(
+          ideaId: 'idea',
+          ideaTitle: 'お題',
+          ideaCreatedAt: DateTime(2026, 11, 7),
+          pickImage: () async => ++picks == 1
+              ? XFile.fromData(png!, name: 'valid.png', path: 'valid.png')
+              : XFile.fromData(
+                  Uint8List.fromList([1]),
+                  name: 'bad.png',
+                  path: 'bad.png',
+                ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('イラストを選択'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artwork-preview')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('artwork-reselect')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('artwork-preview')), findsNothing);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('artwork-send-demo')))
