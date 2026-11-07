@@ -10,7 +10,8 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
-
+/back/.local.env
+/back/try_vision.py
 # 図の生成に使用する一時ツールとロゴは共有対象から除外する。
 .tmp/
 

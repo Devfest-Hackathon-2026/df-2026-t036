@@ -199,6 +199,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                       SettingsScreen(
                         nickname: _me?['nickname'] as String?,
                         googleEmail: widget.googleEmail,
+                        // 設定内のデモにも共通のAPI接続先を渡す。
+                        apiBaseUrl: widget.apiBaseUrl,
                       ),
                     );
                   },
