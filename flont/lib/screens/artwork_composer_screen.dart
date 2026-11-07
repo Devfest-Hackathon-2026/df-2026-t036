@@ -51,6 +51,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
   bool _complete = false;
   bool _confirming = false;
   bool _sending = false;
+  // 結果不明の再送では画像を固定し、サーバーの同一入力による重複防止を利用する。
   bool _retryPending = false;
   http.Client? _activeClient;
   int _sendGeneration = 0;
@@ -101,7 +102,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
       if (file == null || !mounted) return;
       checkArtworkImageSize(await file.length());
       final bytes = await file.readAsBytes();
-      // Recheck the actual byte length, including files with inaccurate metadata.
+      // ファイルの申告容量だけでなく、読み込んだ実データの容量と形式も確認する。
       final format = checkArtworkImageFormat(file.name, bytes);
       var previewAvailable = false;
       var animated = false;
@@ -140,7 +141,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
           buffer.dispose();
         }
       } catch (error) {
-        // HEIF may need server conversion. Never pretend an unseen image was verified.
+        // HEIFを表示できない環境では、未確認の画像を送信可能にしない。
         if (animated || format != ArtworkImageFormat.heif) rethrow;
       }
       // 実送信するデータをここで一度だけ変換し、再試行時も同じバイト列を使う。
@@ -306,6 +307,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
         );
       }
     } finally {
+      // タイムアウト後に認証が遅れて完了しても、送信を新たに開始させない。
       _sendGeneration++;
       if (widget.client == null) client.close();
       _activeClient = null;

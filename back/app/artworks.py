@@ -279,6 +279,7 @@ def _read_image(db, settings, uid: str, submission_id: str) -> bytes:
         raise _unavailable() from exc
     finally:
         client.close()
+    # Storageの応答待ち中に削除・期限到達した作品を、そのまま返さない。
     current = _authorized_image(db, uid, submission_id)
     if (current.get('storagePath') != path or
             (current.get('storageBucket') or settings.artwork_bucket) != bucket):

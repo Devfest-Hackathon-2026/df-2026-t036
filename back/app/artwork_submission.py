@@ -106,6 +106,7 @@ def finalize(db, uid, idea_id, attempt, digest):
             raise ApiError(409, 'SUBMISSION_EXPIRED', '送信処理の有効期限が切れました。再試行してください。')
         data, now = check_eligibility(db, tx, uid, idea_id, user, idea, history)
         result = {'submissionId': sid, 'submittedAt': now.isoformat()}
+        # 作品・履歴・累計・完了記録を同時に確定し、再送で累計を増やさない。
         tx.set(artwork, {'artistId': uid, 'recipientId': data['ownerId'], 'sourceIdeaId': idea_id,
                         'sourceIdeaSnapshot': {key: data[key] for key in ('title', 'description', 'tags', 'ownerId')},
                         'storagePath': attempt['storagePath'], 'storageBucket': attempt['bucket'],
