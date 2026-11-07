@@ -1,5 +1,7 @@
 # Google Cloud Vision SafeSearch 実装設計書
 
+> 現行デモでは一時Storage保存を廃止し、再検証後の画像バイト列を直接Visionへ渡す。以下のGCS URI方式は従来の設計案。現行手順は [Visionデモ](vision-web-demo.md) を参照。
+
 - 対象: M1の作品投稿時に行う不適切画像判定
 - 状態: 実装前の設計案。しきい値・再試行上限等は運用確認後に確定
 - 関連: [作品画像処理・通信設計書](../image-processing-design.md)、[総合仕様書](../specification.md)

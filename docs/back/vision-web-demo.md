@@ -1,45 +1,27 @@
 # Vision API Webデモ（ローカル）
 
-Flutter Webで画像を選び、ローカルFastAPIが画像を正規化して一時的にGCSへ置き、Cloud Vision SafeSearchの5カテゴリを画面に表示する。作品投稿やFirestoreへの作品保存は行わない。
+## 処理の順序
 
-## GCP側の準備
+1. Flutterで形式・容量を確認し、表示可能な静止画を長辺2560px以下のPNGへ変換する。
+2. 「判定する」で認証トークンと画像をFastAPIへ送信する。
+3. FastAPIで受信容量・実形式・画素数・デコード可否を再検証し、向き補正・メタデータ除去・JPEG/PNG変換を行う。
+4. 検証済みの画像バイト列をCloud Vision SafeSearchへ直接渡し、結果を返す。
 
-1. 開発用プロジェクトでCloud Vision APIを有効化し、課金を設定する。
-2. 非公開GCSバケットを用意する。公開アクセス防止とUniform bucket-level accessを有効にする。
-3. ローカル実行ユーザーにバケット単位で`Storage Object User`を付与する。VisionへGCS URIを渡すには、同じ認証主体にオブジェクト読み取り権限も必要。
-4. プロジェクトで`Service Usage Consumer`が必要な場合は、ローカル実行ユーザーに付与する。
+Vision判定用のCloud Storage一時保存・削除・公開URLは不要。作品の閲覧権限は変更しない。これは判定デモであり、作品の正式保存・Firestoreへの投稿確定はまだ接続していない。
 
 ## 起動
 
-1. `back/.env.example`を`back/.local.env`へコピーし、`GOOGLE_CLOUD_PROJECT`をGCPプロジェクトID、`VISION_DEMO_BUCKET`をバケット名に設定する。`back/.local.env`は共有・commitしない。
-2. Google Cloud CLIでローカルADCを用意し、同じプロジェクトをquota projectに設定する。
+1. Google CloudプロジェクトでVision APIと課金を有効化する。
+2. `back/.env.example`を`back/.local.env`へコピーし、`GOOGLE_CLOUD_PROJECT`を設定する。バケット設定・Storage権限は不要。
+3. `gcloud auth application-default login` と `gcloud auth application-default set-quota-project YOUR_PROJECT_ID` でADCを設定する。
+4. `back`で依存をインストールし、`uvicorn app.main:app --reload --port 8080` を起動する。
+5. `flont`で `flutter pub get` と `flutter run -d chrome --web-port=3000` を実行する。
+6. ログイン後、マイページ → 設定 → Vision API デモを開く。
 
-   ```powershell
-   gcloud init
-   gcloud auth application-default login
-   gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-   ```
+## 容量・形式
 
-3. `back`でPython環境を有効化し、依存関係を入れてAPIを起動する。
+入力はJPEG/PNG/HEIC/HEIF、画像本体は20 MiBまで。HEIC/HEIFは端末のデコーダーが対応する場合のみFlutterで変換可能。非対応環境ではJPEG/PNGへの選び直しを案内する。アニメーション・4000万画素超過は拒否する。
 
-   ```powershell
-   pip install -r requirements.txt
-   uvicorn app.main:app --reload --port 8080
-   ```
+FastAPIの受信本文はmultipart付帯情報を含め20 MiB + 64 KiBまで。Content-Lengthが省略・偽装されても実受信量で制限する。変換後の直接送信画像は7,000,000バイトまでとし、Base64化してもVisionの10MB JSON制限に余裕を持たせる。
 
-4. 別のPowerShellで`flont`へ移動し、依存関係を取得してChromeで起動する。ポート3000はFastAPIの既定CORS許可に合わせる。
-
-   ```powershell
-   flutter pub get
-   flutter run -d chrome --web-port=3000
-   ```
-
-5. Googleログインし、**マイページ → 設定 → Vision API デモ**を開く。JPEG/PNG/WebP/HEIC/HEIFを選び、「判定する」を押す。
-
-FastAPIは画像を一時prefixへアップロードし、Vision結果を返した後に削除する。削除失敗に備えてGCSのLifecycleルールで`vision-demo/`配下を短期間後に回収する設定を推奨する。Soft Deleteが有効な場合、削除済みデータは設定期間中保持される。
-
-## 確認する結果
-
-adult / spoof / medical / violence / racyのLikelihoodが画面に表示される。このデモは接続・UI確認用で、投稿の許可・拒否判定や作品保存には接続しない。
-
-ローカルアプリの認証にはADCを使う。サービスアカウント鍵を作成したり、鍵をソース管理へ追加したりしない。
+公式の制限: https://docs.cloud.google.com/vision/quotas

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/authenticated_api.dart';
 import '../theme/page_layout.dart';
+import '../theme/app_theme.dart';
 import '../widgets/idea_card.dart';
 import 'idea_detail_screen.dart';
 
@@ -101,7 +102,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _load({bool append = false}) async {
-    if (_loading || (append && _cursor == null)) return;
+    if (append && (_loading || _cursor == null)) return;
     if (_preview) {
       setState(() {
         _items = List.generate(
@@ -134,7 +135,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (!mounted || generation != _generation) return;
       setState(() {
         _clockOffset = serverTime.difference(DateTime.now());
-        _items = append ? [..._items, ...items] : items;
+        // 更新やページ境界で同じ履歴を二重表示しない。
+        final all = append ? [..._items, ...items] : items;
+        _items = {
+          for (var index = 0; index < all.length; index++)
+            all[index][_drawing ? 'submissionId' : 'ideaId'] ??
+                    'invalid-$index':
+                all[index],
+        }.values.toList();
         _cursor = cursor;
       });
     } catch (error) {
@@ -154,7 +162,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _open(Map<String, dynamic> idea) async {
     final id = idea['ideaId'] as String;
-    final deleted = await Navigator.of(context).push<bool>(
+    // 詳細を開く前の遅延応答で、削除後の一覧を上書きしない。
+    _generation++;
+    setState(() => _loading = false);
+    await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => IdeaDetailScreen(
           idea: IdeaSlotData(
@@ -188,7 +199,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ),
     );
-    if (mounted && deleted == true && !_preview) _load();
+    if (mounted && !_preview) await _load();
   }
 
   Widget _unavailable(String message, {DateTime? submittedAt, bool? liked}) =>
@@ -250,6 +261,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             tags: tags,
             date: created,
             showBookmark: false,
+            // 自分のお題と描いたお題の色分けを維持する。
+            backgroundColor: _drawing ? AppColors.drawnIdea : AppColors.ownIdea,
+            borderColor: _drawing
+                ? AppColors.accentYellow
+                : AppColors.accentGreen,
             onTap: () => _open(idea),
           ),
         ],
@@ -268,7 +284,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         actions: [
           IconButton(
             tooltip: '履歴を更新',
-            onPressed: _loading ? null : _load,
+            // 更新は進行中の追加取得より新しい結果を優先する。
+            onPressed: !_preview && !widget.authenticated
+                ? null
+                : () => _load(),
             icon: const Icon(Icons.refresh),
           ),
         ],

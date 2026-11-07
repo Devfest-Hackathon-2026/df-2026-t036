@@ -43,6 +43,7 @@ class _MainScreenState extends State<MainScreen> {
       apiBaseUrl: widget.apiBaseUrl,
     ),
     ProfileScreen(
+      // IndexedStack内でも、マイページへ切り替わった時点で累計を再取得する。
       active: _selectedIndex == 3,
       me: widget.me,
       googleEmail: widget.googleEmail,

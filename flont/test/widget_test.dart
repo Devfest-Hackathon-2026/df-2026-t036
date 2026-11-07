@@ -78,6 +78,7 @@ void main() {
     expect(find.text('ログアウト'), findsOneWidget);
     expect(find.text('利用規約'), findsOneWidget);
     expect(find.text('プライバシーポリシー'), findsOneWidget);
+    // デモ追加後も、画面下部の項目へスクロールして確認する。
     await tester.scrollUntilVisible(find.text('お問い合わせ'), 200);
     await tester.pumpAndSettle();
     expect(find.text('お問い合わせ'), findsOneWidget);

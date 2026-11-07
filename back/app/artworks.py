@@ -142,6 +142,9 @@ def _list_history(db, uid: str, query: PageQuery) -> HistoryPage:
         if not snap.exists:
             continue
         data = snap.to_dict()
+        # 論理削除されたお題の内容は返さず、描いた履歴だけを保持する。
+        if data.get("deletedAt") is not None:
+            continue
         owner = owners.get(data.get("ownerId"), {})
         ideas[idea_id] = DrawnIdea(
             ideaId=idea_id, ownerId=data["ownerId"], ownerNickname=owner.get("nickname", ""),

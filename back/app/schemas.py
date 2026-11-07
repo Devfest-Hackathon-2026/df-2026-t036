@@ -6,8 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .clock import UtcDatetime
 
-MAX_DECLARED_UPLOAD_BYTES = 512 * 1024 * 1024
-
 
 class ApiModel(BaseModel):
     """未知のフィールドや暗黙の型変換を拒否する。"""
@@ -35,16 +33,6 @@ class PageQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     limit: int = Field(default=20, ge=1, le=50)
     cursor: str | None = Field(default=None, min_length=1, max_length=2048)
-
-
-class ArtworkPrepareInput(InputModel):
-    """Declared upload metadata; server-side byte inspection remains required."""
-
-    ideaId: str = Field(min_length=1, max_length=128)
-    contentType: str = Field(pattern=r"^(image/jpeg|image/png|image/heic|image/heif)$")
-    # This is a high request-contract safety ceiling, not the product's target
-    # upload limit. A lower limit may be selected after deployment measurements.
-    byteSize: int = Field(gt=0, le=MAX_DECLARED_UPLOAD_BYTES)
 
 
 Item = TypeVar("Item")

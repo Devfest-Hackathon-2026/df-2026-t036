@@ -21,7 +21,9 @@ class Settings:
     cors_allow_localhost: bool = False
     maintenance_mode: bool = False
     retry_after_seconds: int = 30
-    vision_demo_bucket: str | None = None
+    # 内部処理は専用サービスアカウントと明示したOIDC audienceだけに許可する。
+    cleanup_service_account: str | None = None
+    cleanup_audience: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -44,11 +46,16 @@ class Settings:
         ))
         if "*" in origins:
             raise ValueError("CORS_ORIGINS must list explicit origins")
+        cleanup_account = (values.get("CLEANUP_SERVICE_ACCOUNT") or "").strip() or None
+        cleanup_audience = (values.get("CLEANUP_AUDIENCE") or "").strip() or None
+        if bool(cleanup_account) != bool(cleanup_audience):
+            raise ValueError("CLEANUP_SERVICE_ACCOUNT and CLEANUP_AUDIENCE must be set together")
         return cls(
             project_id=(values.get("GOOGLE_CLOUD_PROJECT") or "").strip() or None,
             cors_origins=origins,
             cors_allow_localhost=local_cors == 'true',
             maintenance_mode=maintenance == "true",
             retry_after_seconds=retry,
-            vision_demo_bucket=(values.get("VISION_DEMO_BUCKET") or "").strip() or None,
+            cleanup_service_account=cleanup_account,
+            cleanup_audience=cleanup_audience,
         )

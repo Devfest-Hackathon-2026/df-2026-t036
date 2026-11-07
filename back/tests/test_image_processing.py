@@ -57,10 +57,8 @@ def test_empty_image_is_rejected():
     assert error.value.code == "INVALID_IMAGE"
 
 
-def test_heic_input_normalizes_to_supported_output(monkeypatch):
-    from app import image_processing
-
-    monkeypatch.setattr(image_processing, "SUPPORTED_FORMATS", {"JPEG", "PNG", "HEIF"})
+def test_heic_input_normalizes_to_supported_output():
+    # 本番と同じ対応形式の設定で、実際のHEIF画像を変換する。
     source = Image.new("RGB", (8, 6), (45, 70, 90))
     heif_data = encoded_image(source, "HEIF")
     result = normalize_image(heif_data)
