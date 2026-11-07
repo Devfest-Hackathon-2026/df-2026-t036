@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../theme/app_theme.dart';
 import '../theme/page_layout.dart';
+import 'artwork_composer_screen.dart';
 
 class IdeaSlotData {
   const IdeaSlotData({
@@ -52,6 +53,10 @@ class IdeaDetailScreen extends StatefulWidget {
 
 class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
   late String _title = widget.idea.title;
+  // プレビューでは期限から補完し、実データではAPIの投稿日を引き継ぐ。
+  late DateTime _createdAt =
+      widget.idea.createdAt ??
+      widget.idea.expiresAt.subtract(const Duration(days: 7));
   String _description = '';
   List<String> _tags = const [];
   late DateTime _publishedUntil = widget.idea.expiresAt;
@@ -115,6 +120,7 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
         _canSubmit =
             idea['canSubmit'] == true && !_isOwn && idea['hasDrawn'] != true;
         _title = idea['title'] as String;
+        _createdAt = DateTime.parse(idea['createdAt'] as String);
         _description = idea['description'] as String;
         _tags = (idea['tags'] as List<dynamic>).cast<String>();
         _publishedUntil = DateTime.parse(idea['publishedUntil'] as String);
@@ -271,18 +277,15 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
                   key: const ValueKey('idea-send-artwork-button'),
                   icon: const Icon(Icons.send_outlined),
                   label: const Text('イラストを送る'),
-                  // 送信API実装までは送信成功を装わず、準備中と案内する。
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('イラストを送る'),
-                      content: const Text('イラストの送信機能は準備中です。'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('閉じる'),
-                        ),
-                      ],
+                  // 選択したお題を引き継ぎ、送信UIの試作画面へ進む。
+                  onPressed: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (context) => ArtworkComposerScreen(
+                        ideaId: widget.idea.ideaId,
+                        ideaTitle: _title,
+                        ideaCreatedAt: _createdAt,
+                        ideaTags: _tags,
+                      ),
                     ),
                   ),
                 ),
