@@ -1,9 +1,10 @@
 """設定・ミドルウェア・ルーターを組み合わせてAPIを構築する。"""
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings
+from .auth import active_user
 from .errors import ERROR_RESPONSES, install_error_handlers
 from .middleware import RequestContextMiddleware
 from .ideas import router as ideas_router
@@ -32,10 +33,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-Id", "Retry-After"],
     )
     app.include_router(router)
-    app.include_router(ideas_router)
-    app.include_router(artworks_router)
+    # 通常APIはルーター単位で認可し、新しいエンドポイントの付け忘れを防ぐ。
+    # 更新処理内の再確認は、認可後の停止・権限変更との競合を防ぐため維持する。
+    user_access = [Depends(active_user)]
+    app.include_router(ideas_router, dependencies=user_access)
+    app.include_router(artworks_router, dependencies=user_access)
     app.include_router(cleanup_router)
-    app.include_router(vision_demo_router)
+    app.include_router(vision_demo_router, dependencies=user_access)
 
     @app.get("/health")
     def health() -> dict[str, str]:
