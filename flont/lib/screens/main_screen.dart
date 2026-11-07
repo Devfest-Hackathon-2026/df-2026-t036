@@ -43,6 +43,7 @@ class _MainScreenState extends State<MainScreen> {
       apiBaseUrl: widget.apiBaseUrl,
     ),
     ProfileScreen(
+      active: _selectedIndex == 3,
       me: widget.me,
       googleEmail: widget.googleEmail,
       apiBaseUrl: widget.apiBaseUrl,

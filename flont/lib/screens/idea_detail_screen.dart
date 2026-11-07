@@ -36,6 +36,8 @@ class IdeaDetailScreen extends StatefulWidget {
     this.onDelete,
     this.preview = false,
     this.previewCanSubmit = false,
+    this.client,
+    this.idTokenProvider,
   });
 
   final IdeaSlotData idea;
@@ -46,12 +48,21 @@ class IdeaDetailScreen extends StatefulWidget {
   final bool preview;
   // プレビューでも、未描画で受付可能なお題だけ送信ボタンを表示する。
   final bool previewCanSubmit;
+  final http.Client? client;
+  final Future<String?> Function()? idTokenProvider;
 
   @override
   State<IdeaDetailScreen> createState() => _IdeaDetailScreenState();
 }
 
 class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
+  late final http.Client _client = widget.client ?? http.Client();
+  @override
+  void dispose() {
+    if (widget.client == null) _client.close();
+    super.dispose();
+  }
+
   late String _title = widget.idea.title;
   // プレビューでは期限から補完し、実データではAPIの投稿日を引き継ぐ。
   late DateTime _createdAt =
@@ -95,11 +106,13 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
       _error = null;
     });
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final token = widget.idTokenProvider == null
+          ? await FirebaseAuth.instance.currentUser?.getIdToken()
+          : await widget.idTokenProvider!();
       if (token == null || token.isEmpty) {
         throw StateError('ログイン情報を取得できません。再度ログインしてください。');
       }
-      final response = await http
+      final response = await _client
           .get(
             Uri.parse(
               '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
