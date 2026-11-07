@@ -27,3 +27,5 @@ flutter:
     # FirebaseのWeb公開設定を同梱する。Admin SDKの秘密鍵は入れない。
     - firebase-config.local.json
     - assets/images/
+    # 公開する利用規約だけを同梱し、内部の確認メモは含めない。
+    - assets/legal/terms-test.md
