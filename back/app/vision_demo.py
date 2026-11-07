@@ -12,6 +12,7 @@ from .auth import ActiveUser
 from .errors import ApiError
 from .image_processing import ImageProcessingError, normalize_image
 from .upload_limits import MAX_DEMO_UPLOAD_BYTES
+from .vision_policy import CATEGORIES, POLICY_VERSION, evaluate_categories
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1")
@@ -37,30 +38,33 @@ async def inspect_image(
     if len(normalized.data) > MAX_INLINE_IMAGE_BYTES:
         raise ApiError(413, "PAYLOAD_TOO_LARGE", "変換後の画像は7MB以下にしてください。")
 
-    def analyze():
-        # バケットや公開URLを経由せず、変換済みバイト列を直接渡す。
-        image = vision.Image(content=normalized.data)
-        with vision.ImageAnnotatorClient() as client:
-            response = client.safe_search_detection(image=image, timeout=60)
-        if response.error.message:
-            raise RuntimeError("Vision returned an image annotation error")
-        annotation = response.safe_search_annotation
-        return {
-            "categories": {
-                "adult": annotation.adult.name,
-                "spoof": annotation.spoof.name,
-                "medical": annotation.medical.name,
-                "violence": annotation.violence.name,
-                "racy": annotation.racy.name,
-            },
-            "width": normalized.width,
-            "height": normalized.height,
-        }
 
     try:
-        return await run_in_threadpool(analyze)
+        return await run_in_threadpool(analyze_image, normalized)
     except ApiError:
         raise
     except Exception as exc:
         logger.warning("vision_demo_failed exceptionType=%s", type(exc).__name__)
         raise ApiError(503, "SERVICE_UNAVAILABLE", "画像を判定できませんでした。設定と接続を確認してください。") from exc
+
+
+def analyze_image(normalized):
+    # バケットや公開URLを経由せず、変換済みバイト列を直接渡す。
+    image = vision.Image(content=normalized.data)
+    with vision.ImageAnnotatorClient() as client:
+        response = client.safe_search_detection(image=image, timeout=60)
+    if response.error.message:
+        raise RuntimeError("Vision returned an image annotation error")
+    annotation = response.safe_search_annotation
+    # 未知の列挙値も判定不能として扱い、承認しない。
+    categories = {
+        category: getattr(getattr(annotation, category), "name", "UNKNOWN")
+        for category in CATEGORIES
+    }
+    return {
+        "categories": categories,
+        "decision": evaluate_categories(categories),
+        "policyVersion": POLICY_VERSION,
+        "width": normalized.width,
+        "height": normalized.height,
+    }

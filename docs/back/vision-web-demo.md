@@ -25,3 +25,7 @@ Vision判定用のCloud Storage一時保存・削除・公開URLは不要。作�
 FastAPIの受信本文はmultipart付帯情報を含め20 MiB + 64 KiBまで。Content-Lengthが省略・偽装されても実受信量で制限する。変換後の直接送信画像は7,000,000バイトまでとし、Base64化してもVisionの10MB JSON制限に余裕を持たせる。
 
 公式の制限: https://docs.cloud.google.com/vision/quotas
+
+## 判定基準
+
+5カテゴリすべてがPOSSIBLE以下ならapproved、1カテゴリでもLIKELY以上ならrejected。不明・欠損は、拒否カテゴリがない場合retry_requiredとする。応答のdecisionとpolicyVersionで確認できる。判定デモなので作品の正式保存は行わない。
