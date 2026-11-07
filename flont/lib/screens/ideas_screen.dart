@@ -20,11 +20,15 @@ class IdeasScreen extends StatefulWidget {
     this.apiBaseUrl = 'http://localhost:8080',
     this.authenticated = false,
     this.active = true,
+    this.client,
+    this.idTokenProvider,
   });
 
   final String apiBaseUrl;
   final bool authenticated;
   final bool active;
+  final http.Client? client;
+  final Future<String?> Function()? idTokenProvider;
 
   @override
   State<IdeasScreen> createState() => _IdeasScreenState();
@@ -38,6 +42,15 @@ class _IdeasScreenState extends State<IdeasScreen> {
     _slotCount,
     null,
   );
+  final _slotErrors = List<String?>.filled(_slotCount, null);
+  late final http.Client _client = widget.client ?? http.Client();
+
+  @override
+  void dispose() {
+    if (widget.client == null) _client.close();
+    super.dispose();
+  }
+
   bool _showBookmarks = false;
   bool _bookmarksLoading = false;
   bool _previewBookmarksInitialized = false;
@@ -121,7 +134,7 @@ class _IdeasScreenState extends State<IdeasScreen> {
     });
     try {
       final token = await _getIdToken();
-      final response = await http
+      final response = await _client
           .get(
             Uri.parse(
               '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/me/pins',
@@ -160,7 +173,7 @@ class _IdeasScreenState extends State<IdeasScreen> {
     try {
       if (!_isPreview) {
         final token = await _getIdToken();
-        final response = await http
+        final response = await _client
             .delete(
               Uri.parse(
                 '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/pins/$id',
@@ -192,7 +205,9 @@ class _IdeasScreenState extends State<IdeasScreen> {
   }
 
   Future<String> _getIdToken() async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final token = widget.idTokenProvider == null
+        ? await FirebaseAuth.instance.currentUser?.getIdToken()
+        : await widget.idTokenProvider!();
     if (token == null || token.isEmpty) {
       throw StateError('ログイン情報を取得できません。再度ログインしてください。');
     }
@@ -222,7 +237,7 @@ class _IdeasScreenState extends State<IdeasScreen> {
     }
     try {
       final token = await _getIdToken();
-      final response = await http
+      final response = await _client
           .get(
             Uri.parse(
               '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/me/slots',
@@ -237,36 +252,50 @@ class _IdeasScreenState extends State<IdeasScreen> {
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       final slots = payload['slots'] as Map<String, dynamic>;
       // 掲載枠の詳細から、TLと同じタイトル・タグ・投稿日を表示する。
+      final errors = List<String?>.filled(_slotCount, null);
       final ideas = await Future.wait(
         List.generate(_slotCount, (index) async {
           final slot = slots['slot_$index'];
           if (slot is! Map<String, dynamic>) return null;
-          final detail = await http
-              .get(
-                Uri.parse(
-                  '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/ideas/${slot['ideaId']}',
-                ),
-                headers: {'Authorization': 'Bearer $token'},
-              )
-              .timeout(const Duration(seconds: 30));
-          if (detail.statusCode != 200) {
-            throw StateError(_messageFromResponse(detail));
+          try {
+            final detail = await _client
+                .get(
+                  Uri.parse(
+                    '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/ideas/${slot['ideaId']}',
+                  ),
+                  headers: {'Authorization': 'Bearer $token'},
+                )
+                .timeout(const Duration(seconds: 30));
+            if (detail.statusCode != 200) {
+              throw StateError(
+                detail.statusCode == 403 || detail.statusCode == 404
+                    ? '参照できません'
+                    : _messageFromResponse(detail),
+              );
+            }
+            final data =
+                jsonDecode(utf8.decode(detail.bodyBytes))
+                    as Map<String, dynamic>;
+            return IdeaSlotData(
+              ideaId: data['ideaId'] as String,
+              title: data['title'] as String,
+              createdAt: DateTime.parse(data['createdAt'] as String),
+              expiresAt: DateTime.parse(data['publishedUntil'] as String),
+              previewTags: (data['tags'] as List).cast<String>(),
+            );
+          } catch (error) {
+            errors[index] = error is StateError
+                ? error.message.toString()
+                : '読み込みに失敗しました。';
+            return null;
           }
-          final data =
-              jsonDecode(utf8.decode(detail.bodyBytes)) as Map<String, dynamic>;
-          return IdeaSlotData(
-            ideaId: data['ideaId'] as String,
-            title: data['title'] as String,
-            createdAt: DateTime.parse(data['createdAt'] as String),
-            expiresAt: DateTime.parse(data['publishedUntil'] as String),
-            previewTags: (data['tags'] as List).cast<String>(),
-          );
         }),
       );
       if (!mounted) return;
       setState(() {
         for (var index = 0; index < _slotCount; index++) {
           _slotIdeas[index] = ideas[index];
+          _slotErrors[index] = errors[index];
         }
         _loadError = null;
       });
@@ -318,7 +347,7 @@ class _IdeasScreenState extends State<IdeasScreen> {
     }
 
     final token = await _getIdToken();
-    final response = await http
+    final response = await _client
         .delete(
           Uri.parse(
             '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}'
@@ -360,7 +389,7 @@ class _IdeasScreenState extends State<IdeasScreen> {
     }
 
     final token = await _getIdToken();
-    final response = await http
+    final response = await _client
         .post(
           Uri.parse(
             '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/ideas',
@@ -538,6 +567,25 @@ class _IdeasScreenState extends State<IdeasScreen> {
   }
 
   Widget _buildSlot(int index) {
+    // Keep unavailable occupied slots distinct from empty slots.
+    if (_slotErrors[index] != null) {
+      return Card(
+        key: ValueKey('idea-slot-${index + 1}'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_slotErrors[index]!),
+              TextButton(
+                onPressed: _isLoading ? null : _loadSlots,
+                child: const Text('再試行'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final idea = _slotIdeas[index];
     if (idea != null) {
       return IdeaCard(
@@ -561,7 +609,9 @@ class _IdeasScreenState extends State<IdeasScreen> {
         label: '枠 ${index + 1}にアイデアを投稿',
         button: true,
         child: InkWell(
-          onTap: _isLoading ? null : () => _openComposer(index),
+          onTap: _isLoading || _loadError != null
+              ? null
+              : () => _openComposer(index),
           child: SizedBox(
             height: 112,
             child: Center(

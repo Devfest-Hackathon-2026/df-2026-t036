@@ -61,6 +61,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
   bool _retryRefresh = false;
   String? _nextCursor;
   String? _error;
+  int _loadGeneration = 0;
   bool _loading = false;
   bool _saving = false;
 
@@ -73,9 +74,15 @@ class _TimelineScreenState extends State<TimelineScreen> {
   @override
   void didUpdateWidget(covariant TimelineScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.active && !widget.active) {
+      _loadGeneration++;
+      _loading = false;
+    }
     if (oldWidget.apiBaseUrl != widget.apiBaseUrl ||
         oldWidget.authenticated != widget.authenticated ||
         (!oldWidget.active && widget.active && !_isPreview)) {
+      _loadGeneration++;
+      _loading = false;
       _cursors.clear();
       _cursors.add(null);
       _ideas = [];
@@ -159,7 +166,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
       return;
     }
-    if (_loading || _saving || !widget.authenticated) return;
+    if (_loading || _saving || !widget.authenticated || !widget.active) return;
+    final generation = ++_loadGeneration;
     // 失敗時に表示中のページではなく、取得を試みたページを再試行する。
     _retryPage = page;
     _retryRefresh = refresh;
@@ -182,7 +190,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
       final pins =
           jsonDecode(utf8.decode(responses[1].bodyBytes))
               as Map<String, dynamic>;
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _ideas = (data['items'] as List).cast<Map<String, dynamic>>();
         _bookmarks = (pins['items'] as List)
@@ -201,7 +209,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
       });
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
     } catch (error) {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(
           () => _error = error is StateError
               ? error.message.toString()
@@ -209,7 +217,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 

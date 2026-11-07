@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'terms_screen.dart';
 
 /// 新規登録とログインの状態を表示する画面。
 class LoginScreen extends StatelessWidget {
@@ -139,6 +140,18 @@ class LoginScreen extends StatelessWidget {
                                         : 'Googleで新規登録・ログイン',
                                   ),
                                 ),
+                              ),
+                              // 認証前でも、設定画面と同じ規約全文を確認できる。
+                              TextButton(
+                                key: const ValueKey('login-terms-button'),
+                                onPressed: () =>
+                                    Navigator.of(context).push<void>(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const TermsScreen(),
+                                      ),
+                                    ),
+                                child: const Text('利用規約を確認する'),
                               ),
                               // 通信状況を表示し、失敗時は再試行やアカウント変更を可能にする。
                               if (busy) ...[
