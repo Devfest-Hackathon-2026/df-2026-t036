@@ -71,18 +71,18 @@ Likelihoodは序数として扱う。生レスポンス全文や画像bytesは�
 
 ## 4. 判定ポリシー
 
-初期ポリシー案（要プロダクト確定）:
+確定ポリシー（`possible-allowed-v2`）:
 
 | SafeSearch値 | 処理 | M1での扱い |
 |---|---|---|
-| `VERY_UNLIKELY`, `UNLIKELY` | 許可候補 | 他カテゴリも許容なら作品確定へ進む |
-| `POSSIBLE` | 境界 | `review_required`相当。人手確認がないM1では確定しない |
+| `VERY_UNLIKELY`, `UNLIKELY` | 承認 | 他カテゴリも許容なら作品確定へ進む |
+| `POSSIBLE` | 承認 | 他カテゴリも許容なら作品確定へ進む |
 | `LIKELY`, `VERY_LIKELY` | 拒否 | 完成領域に保存せず、利用者へ投稿不可を返す |
 | 欠損、`UNKNOWN`、未知の列挙値 | 判定不能 | fail-closedで確定せず、retry可能状態または運用確認へ |
 
-初期案では5カテゴリすべてに同じ閾値を適用する。カテゴリ別閾値が必要になった場合はpolicy versionを上げ、既存sessionの再試行時にもどのルールを使ったか追跡できるようにする。SafeSearchは確率的な補助判定であり、判定結果を「違法性の確定」として表示しない。拒否メッセージはカテゴリや内部スコアを露出しない汎用文言とする。
+adult・spoof・violenceに同じ閾値を適用する。medical（医療表現）とracy（刺激の強い表現）は結果の取得・表示のみとし、承認・拒否・判定不能の判断に使わない。カテゴリ別閾値が必要になった場合はpolicy versionを上げ、既存sessionの再試行時にもどのルールを使ったか追跡できるようにする。SafeSearchは確率的な補助判定であり、判定結果を「違法性の確定」として表示しない。拒否メッセージはカテゴリや内部スコアを露出しない汎用文言とする。
 
-M1に人手審査画面がない場合、`POSSIBLE`を暗黙に許可するのではなく、投稿保留または拒否のどちらかを運営方針として決める。本書では安全側の保留を推奨する。
+判定対象の3カテゴリがPOSSIBLE以下ならapproved、1カテゴリでもLIKELY以上ならrejectedとする。拒否がなく、欠損・UNKNOWN・未知の値がある場合はretry_requiredとする。API障害は503のままとし、承認しない。現行デモはdecisionとpolicyVersionを返すが、通常投稿では同じ基準を保存・確定の前に適用する。
 
 ## 5. 状態遷移・冪等性
 
@@ -170,8 +170,8 @@ GCS URIはsession内で取得した正規化済みオブジェクトからサー
 
 ## 12. 未確定事項
 
-- 各SafeSearchカテゴリの許容上限（初期案: `UNLIKELY`以下を許可）
-- `POSSIBLE`を拒否または保留とするか。M1手動審査の有無
+- 各SafeSearchカテゴリの許容上限は`POSSIBLE`以下に確定
+- `POSSIBLE`は承認。手動審査フローは現行デモの対象外
 - Vision・GCSにおける正規化WebPの対応確認と、非対応時の代替形式
 - SDK timeout、最大attempt、session再試行期限
 - Firestoreへ保存するmoderation項目と保持期間

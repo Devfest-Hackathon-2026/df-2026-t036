@@ -1,8 +1,10 @@
-"""受信作品一覧、描いた履歴、既読・いいね操作。画像データは扱わない。"""
+"""受信作品一覧、描いた履歴、既読・いいね操作と受信者限定の画像配信。"""
 
 from firebase_admin import firestore
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, Response
 from google.cloud.firestore_v1.base_query import FieldFilter
+from google.cloud import storage
+from google.api_core.exceptions import NotFound
 from starlette.concurrency import run_in_threadpool
 
 from .auth import ActiveUser, active
@@ -11,6 +13,7 @@ from .errors import ApiError
 from .firebase import database
 from .ideas import _cursor_decode, _cursor_encode
 from .schemas import ApiModel, Page, PageQuery
+from .upload_limits import MAX_DEMO_UPLOAD_BYTES
 
 router = APIRouter(prefix="/api/v1")
 
@@ -245,3 +248,51 @@ async def read_artwork(submission_id: str, user: ActiveUser):
 @router.post("/artworks/{submission_id}/like", response_model=LikeResult)
 async def like_artwork(submission_id: str, user: ActiveUser):
     return await run_in_threadpool(lambda: _like(database(), user["uid"], submission_id))
+
+
+def _authorized_image(db, uid: str, submission_id: str) -> dict:
+    """画像取得の前後で、受信者・期限・削除・停止状態を確認する。"""
+    user = db.collection('users').document(uid).get()
+    artwork = db.collection('artworks').document(submission_id).get()
+    if not user.exists or not artwork.exists:
+        raise _unavailable()
+    active(user.to_dict())
+    data = artwork.to_dict()
+    if (data.get('recipientId') != uid or data.get('deletedAt') is not None
+            or data.get('expiresAt') is None or data['expiresAt'] <= utc_now()):
+        raise _unavailable()
+    return data
+
+
+def _read_image(db, settings, uid: str, submission_id: str) -> bytes:
+    data = _authorized_image(db, uid, submission_id)
+    bucket = data.get('storageBucket') or settings.artwork_bucket
+    path = data.get('storagePath')
+    if not bucket or not path:
+        raise _unavailable()
+    client = storage.Client(project=settings.project_id)
+    try:
+        # 壊れた保存データでも無制限にメモリーへ読み込まない。
+        image = client.bucket(bucket).blob(path).download_as_bytes(
+            start=0, end=MAX_DEMO_UPLOAD_BYTES, timeout=30)
+    except NotFound as exc:
+        raise _unavailable() from exc
+    finally:
+        client.close()
+    # Storageの応答待ち中に削除・期限到達した作品を、そのまま返さない。
+    current = _authorized_image(db, uid, submission_id)
+    if (current.get('storagePath') != path or
+            (current.get('storageBucket') or settings.artwork_bucket) != bucket):
+        raise _unavailable()
+    if not image or len(image) > MAX_DEMO_UPLOAD_BYTES:
+        raise ApiError(503, 'SERVICE_UNAVAILABLE', '画像を読み込めませんでした。')
+    return image
+
+
+@router.get('/artworks/{submission_id}/image')
+async def get_artwork_image(submission_id: str, request: Request, user: ActiveUser):
+    """公開URLを返さず、認可した受信者にだけ画像バイト列を配信する。"""
+    image = await run_in_threadpool(lambda: _read_image(
+        database(), request.app.state.settings, user['uid'], submission_id))
+    return Response(content=image, media_type='image/webp',
+                    headers={'X-Content-Type-Options': 'nosniff'})

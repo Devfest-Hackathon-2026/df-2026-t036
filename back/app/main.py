@@ -9,6 +9,7 @@ from .errors import ERROR_RESPONSES, install_error_handlers
 from .middleware import RequestContextMiddleware
 from .ideas import router as ideas_router
 from .artworks import router as artworks_router
+from .artwork_submission import router as submission_router, internal_router as artwork_cleanup_router
 from .cleanup import router as cleanup_router
 from .vision_demo import router as vision_demo_router
 from .users import router
@@ -38,6 +39,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     user_access = [Depends(active_user)]
     app.include_router(ideas_router, dependencies=user_access)
     app.include_router(artworks_router, dependencies=user_access)
+    app.include_router(submission_router, dependencies=user_access)
+    app.include_router(artwork_cleanup_router)
     app.include_router(cleanup_router)
     app.include_router(vision_demo_router, dependencies=user_access)
 

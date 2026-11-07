@@ -290,17 +290,25 @@ class _IdeaDetailScreenState extends State<IdeaDetailScreen> {
                   key: const ValueKey('idea-send-artwork-button'),
                   icon: const Icon(Icons.send_outlined),
                   label: const Text('イラストを送る'),
-                  // 選択したお題を引き継ぎ、送信UIの試作画面へ進む。
-                  onPressed: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute(
-                      builder: (context) => ArtworkComposerScreen(
-                        ideaId: widget.idea.ideaId,
-                        ideaTitle: _title,
-                        ideaCreatedAt: _createdAt,
-                        ideaTags: _tags,
+                  // 接続先と認証も引き継ぎ、通常の送信画面へ進む。
+                  onPressed: () async {
+                    await Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (context) => ArtworkComposerScreen(
+                          ideaId: widget.idea.ideaId,
+                          ideaTitle: _title,
+                          ideaCreatedAt: _createdAt,
+                          ideaTags: _tags,
+                          apiBaseUrl: widget.apiBaseUrl,
+                          preview: widget.preview,
+                          client: widget.client,
+                          idTokenProvider: widget.idTokenProvider,
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                    // 送信後や通信結果不明で戻った際も、サーバーの送信可否を再取得する。
+                    if (mounted && !widget.preview) await _loadIdea();
+                  },
                 ),
               ],
               const SizedBox(height: 28),

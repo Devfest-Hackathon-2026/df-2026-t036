@@ -16,6 +16,7 @@ class Settings:
     """プロセス共通の設定。認証情報自体はADCに任せる。"""
 
     project_id: str | None = None
+    artwork_bucket: str | None = None
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
     # 明示的に許可した開発環境だけ、Flutterの可変ローカルポートを受け付ける。
     cors_allow_localhost: bool = False
@@ -52,6 +53,7 @@ class Settings:
             raise ValueError("CLEANUP_SERVICE_ACCOUNT and CLEANUP_AUDIENCE must be set together")
         return cls(
             project_id=(values.get("GOOGLE_CLOUD_PROJECT") or "").strip() or None,
+            artwork_bucket=(values.get("ARTWORK_BUCKET") or "").strip() or None,
             cors_origins=origins,
             cors_allow_localhost=local_cors == 'true',
             maintenance_mode=maintenance == "true",

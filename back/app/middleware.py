@@ -31,8 +31,8 @@ class RequestContextMiddleware:
         request.state.request_id = request_id
         path = scope["path"]
         normal_api = path == "/api/v1" or path.startswith("/api/v1/")
-        internal_cleanup = path == "/api/v1/internal/cleanup" and scope["method"] == "POST"
-        limited_upload = path.rstrip('/') == '/api/v1/vision-demo' and scope['method'] == 'POST'
+        internal_cleanup = path in {"/api/v1/internal/cleanup", "/api/v1/internal/artwork-cleanup"} and scope["method"] == "POST"
+        limited_upload = path.rstrip('/') in {'/api/v1/vision-demo', '/api/v1/artworks'} and scope['method'] == 'POST'
         received_bytes = 0
 
         async def limited_receive():

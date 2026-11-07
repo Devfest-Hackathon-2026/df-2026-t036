@@ -141,6 +141,7 @@ def test_file_validation_before_vision(monkeypatch, file_limit, expected):
         with Image.open(BytesIO(sent.content)) as processed:
             assert processed.format == 'JPEG'
         assert response.json()["width"] == 8
+        assert response.json()["decision"] == "approved"
 
 
 def test_inline_limit_rejects_before_vision(monkeypatch):

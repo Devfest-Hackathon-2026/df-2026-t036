@@ -1,5 +1,7 @@
 # お絵描きマッチングサービス ハッカソン版 DB・API仕様書
 
+> 現行サーバー実装: 画像は `POST /api/v1/artworks` でFastAPIへ直接送信し、再検証・Vision承認後にWebPで正式保存する。以下のprepare/commit・一時アップロード方式は従来案。現行の投稿・再送・回収契約は [作品投稿API](../back/artwork-submission.md) を参照。
+
 - **版**：v0.9（2026-11-05、細部整理案採用）
 - **対象**：Flutter Webのハッカソン版。設計仕様であり、実装完了を示さない。
 - **技術**：Firebase Authentication（Google）、Firestore、Cloud Storage、Cloud Run / FastAPI、Firebase Hosting
