@@ -47,7 +47,7 @@ void main() {
         await tester.ensureVisible(button);
         await tester.tap(button);
         await tester.pumpAndSettle();
-        expect(find.text('イラストの送信機能は準備中です。'), findsOneWidget);
+        expect(find.text('UIプレビュー・実際には送信されません'), findsOneWidget);
       }
     });
   }
