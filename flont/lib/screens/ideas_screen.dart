@@ -467,16 +467,6 @@ class _IdeasScreenState extends State<IdeasScreen> {
                 Text(_bookmarksError!),
                 TextButton(onPressed: _loadBookmarks, child: const Text('再試行')),
               ],
-              if (!_bookmarksLoading &&
-                  _bookmarksError == null &&
-                  _bookmarks.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'ブックマークしたアイデアはありません。',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
               // 保存済みと空き枠を合わせ、常に五つのスロットを並べる。
               for (var index = 0; index < _slotCount; index++) ...[
                 _buildBookmarkSlot(index),

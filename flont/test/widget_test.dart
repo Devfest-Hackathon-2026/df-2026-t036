@@ -19,7 +19,7 @@ void main() {
     expect(find.byKey(const ValueKey('idea-slot-1')), findsOneWidget);
     await tester.tap(find.byTooltip('ブックマーク'));
     await tester.pumpAndSettle();
-    expect(find.text('ブックマークしたアイデアはありません。'), findsOneWidget);
+    expect(find.text('ブックマークしたアイデアはありません。'), findsNothing);
     expect(find.byKey(const ValueKey('idea-slot-1')), findsNothing);
     final lastBookmark = find.byKey(const ValueKey('bookmark-slot-5'));
     // 空の状態でも五枠目まで縦に表示される。
