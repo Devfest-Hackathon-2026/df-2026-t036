@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/page_layout.dart';
+import '../models/artwork_image_format.dart';
 import '../widgets/idea_card.dart';
 
 /// 画像の選択から確認までを試すUI。アップロードやDBへの書き込みは行わない。
@@ -30,26 +31,50 @@ class ArtworkComposerScreen extends StatefulWidget {
 }
 
 class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
-  static const _maxBytes = 30 * 1024 * 1024;
   Uint8List? _bytes;
   String? _filename;
   String? _error;
   bool _picking = false;
   bool _demoComplete = false;
+  bool _confirming = false;
+  bool _previewAvailable = false;
+  int? _previewWidth;
+  int? _previewHeight;
+  ArtworkImageFormat? _format;
+
+  String get _formatLabel => switch (_format) {
+    ArtworkImageFormat.png => 'PNG',
+    ArtworkImageFormat.jpeg => 'JPEG',
+    ArtworkImageFormat.webp => 'WebP',
+    ArtworkImageFormat.heif => 'HEIC/HEIF',
+    null => '',
+  };
 
   Future<XFile?> _openImage() => openFile(
     acceptedTypeGroups: const [
       XTypeGroup(
         label: 'イラスト',
-        extensions: ['png', 'jpg', 'jpeg'],
-        mimeTypes: ['image/png', 'image/jpeg'],
-        uniformTypeIdentifiers: ['public.png', 'public.jpeg'],
+        extensions: ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif'],
+        mimeTypes: [
+          'image/png',
+          'image/jpeg',
+          'image/webp',
+          'image/heic',
+          'image/heif',
+        ],
+        uniformTypeIdentifiers: [
+          'public.png',
+          'public.jpeg',
+          'org.webmproject.webp',
+          'public.heic',
+          'public.heif',
+        ],
       ),
     ],
   );
 
   Future<void> _selectImage() async {
-    if (_picking) return;
+    if (_picking || _confirming) return;
     setState(() {
       _picking = true;
       _error = null;
@@ -57,45 +82,55 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
     try {
       final file = await (widget.pickImage ?? _openImage)();
       if (file == null || !mounted) return;
-      final extension = file.name.split('.').last.toLowerCase();
-      if (!['png', 'jpg', 'jpeg'].contains(extension)) {
-        throw StateError('PNG・JPEGの画像を選択してください。');
-      }
-      final length = await file.length();
-      if (length == 0 || length > _maxBytes) {
-        throw StateError('空でない30MB以内の画像を選択してください。');
-      }
+      checkArtworkImageSize(await file.length());
       final bytes = await file.readAsBytes();
-      // 名前を変更したWebPなども受け付けず、実体と拡張子の一致を確認する。
-      const pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-      final isPng =
-          bytes.length >= pngSignature.length &&
-          List.generate(
-            pngSignature.length,
-            (i) => bytes[i] == pngSignature[i],
-          ).every((matches) => matches);
-      final isJpeg =
-          bytes.length >= 3 &&
-          bytes[0] == 0xFF &&
-          bytes[1] == 0xD8 &&
-          bytes[2] == 0xFF;
-      if ((extension == 'png' && !isPng) || (extension != 'png' && !isJpeg)) {
-        throw StateError('PNG・JPEGの画像を選択してください。');
-      }
-      // 拡張子だけで判定せず、プレビュー可能な画像か確認する。
-      // 縮小デコードで大きな画像のプレビュー用メモリを抑える。
-      final codec = await ui.instantiateImageCodec(
-        bytes,
-        targetWidth: 1600,
-        allowUpscaling: false,
-      );
+      // Recheck the actual byte length, including files with inaccurate metadata.
+      final format = checkArtworkImageFormat(file.name, bytes);
+      var previewAvailable = false;
+      var animated = false;
+      int? previewWidth;
+      int? previewHeight;
       try {
-        final frame = await codec.getNextFrame();
-        frame.image.dispose();
-      } finally {
-        codec.dispose();
+        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+        try {
+          final descriptor = await ui.ImageDescriptor.encoded(buffer);
+          try {
+            final longest = descriptor.width > descriptor.height
+                ? descriptor.width
+                : descriptor.height;
+            final scale = longest > 1600 ? 1600 / longest : 1.0;
+            previewWidth = (descriptor.width * scale).round().clamp(1, 1600);
+            previewHeight = (descriptor.height * scale).round().clamp(1, 1600);
+            final codec = await descriptor.instantiateCodec(
+              targetWidth: previewWidth,
+              targetHeight: previewHeight,
+            );
+            try {
+              if (codec.frameCount != 1) {
+                animated = true;
+                throw StateError('静止画を1枚選択してください。');
+              }
+              final frame = await codec.getNextFrame();
+              frame.image.dispose();
+              previewAvailable = true;
+            } finally {
+              codec.dispose();
+            }
+          } finally {
+            descriptor.dispose();
+          }
+        } finally {
+          buffer.dispose();
+        }
+      } catch (error) {
+        // HEIF may need server conversion. Never pretend an unseen image was verified.
+        if (animated || format != ArtworkImageFormat.heif) rethrow;
       }
       if (!mounted) return;
+      _format = format;
+      _previewAvailable = previewAvailable;
+      _previewWidth = previewWidth;
+      _previewHeight = previewHeight;
       setState(() {
         _bytes = bytes;
         _filename = file.name;
@@ -103,11 +138,15 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is StateError
+        setState(() {
+          _bytes = null;
+          _filename = null;
+          _format = null;
+          _previewAvailable = false;
+          _error = error is StateError
               ? error.message.toString()
-              : '画像を読み込めませんでした。別の画像を選ぶか再試行してください。',
-        );
+              : '画像を読み込めませんでした。別の画像を選ぶか再試行してください。';
+        });
       }
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -115,13 +154,15 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
   }
 
   Future<void> _confirmDemo() async {
-    if (_bytes == null || _picking) return;
+    if (_bytes == null || !_previewAvailable || _picking || _confirming) return;
+    setState(() => _confirming = true);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('送信内容の確認（デモ）'),
         content: Text(
-          '「${widget.ideaTitle}」への送信操作を試します。\n画像はアップロードされず、相手にも届きません。',
+          '「${widget.ideaTitle}」への送信操作を試します。\n$_filename ($_formatLabel)\n\n実送信後は取り消し・差し替えはできません。\nこれはデモです。画像はアップロードされず、相手にも届きません。',
         ),
         actions: [
           TextButton(
@@ -136,7 +177,9 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (!mounted) return;
+    setState(() => _confirming = false);
+    if (confirmed != true) return;
     // 仮の完了状態だけを表示し、送信履歴や受付状態は変更しない。
     setState(() => _demoComplete = true);
   }
@@ -257,15 +300,29 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                                             style: theme.textTheme.titleMedium,
                                           ),
                                           const SizedBox(height: 8),
-                                          const Text('PNG・JPEG / 30MB以内'),
+                                          const Text(
+                                            'PNG・JPEG・WebP・HEIC/HEIF / 30MB以内',
+                                            textAlign: TextAlign.center,
+                                          ),
                                         ],
+                                      ),
+                                    )
+                                  : !_previewAvailable
+                                  ? const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(16),
+                                        child: Text(
+                                          'このHEIC/HEIFはブラウザで表示できません。\n画像変換への対応後に確認・送信できます。\n今はPNG・JPEG・WebPを選び直してください。',
+                                          textAlign: TextAlign.center,
+                                        ),
                                       ),
                                     )
                                   : Image.memory(
                                       _bytes!,
                                       key: const ValueKey('artwork-preview'),
                                       fit: BoxFit.contain,
-                                      cacheWidth: 1600,
+                                      cacheWidth: _previewWidth,
+                                      cacheHeight: _previewHeight,
                                       gaplessPlayback: true,
                                       errorBuilder:
                                           (context, error, stackTrace) =>
@@ -300,6 +357,11 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                               ],
                             ),
                           ],
+                          if (_filename != null)
+                            Text(
+                              '$_formatLabel / ${(_bytes!.length / (1024 * 1024)).toStringAsFixed(2)} MB',
+                              style: theme.textTheme.bodySmall,
+                            ),
                           if (_error != null) ...[
                             const SizedBox(height: 12),
                             Text(
@@ -311,7 +373,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                           ],
                           SizedBox(height: compact ? 8 : 20),
                           Text(
-                            '送信するのは、自分で描いたイラストにしてください。',
+                            '自作の静止画を選択してください。生成AI画像は送信できません。',
                             style: theme.textTheme.bodyMedium,
                           ),
                           SizedBox(height: compact ? 8 : 16),
@@ -319,7 +381,11 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                           const Spacer(),
                           FilledButton.icon(
                             key: const ValueKey('artwork-send-demo'),
-                            onPressed: _bytes == null || _picking
+                            onPressed:
+                                _bytes == null ||
+                                    !_previewAvailable ||
+                                    _picking ||
+                                    _confirming
                                 ? null
                                 : _confirmDemo,
                             icon: const Icon(Icons.send_outlined),
@@ -327,7 +393,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '対応形式はPNG・JPEGのみです。実際の送信は今後対応します。',
+                            'HEIC/HEIFは表示できない環境があります。実送信は未対応です。',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
