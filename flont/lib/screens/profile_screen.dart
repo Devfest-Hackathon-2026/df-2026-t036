@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/page_layout.dart';
 import '../widgets/profile_card.dart';
 import 'idea_history_screen.dart';
 import 'drawing_history_screen.dart';
@@ -13,11 +14,12 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final layout = PageLayout.of(context);
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: layout.insets,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

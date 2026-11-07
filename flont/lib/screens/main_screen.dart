@@ -6,11 +6,17 @@ import 'inbox_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key, this.me, this.googleEmail});
+  const MainScreen({
+    super.key,
+    this.me,
+    this.googleEmail,
+    this.apiBaseUrl = 'http://localhost:8080',
+  });
 
   // 登録APIが返した本人情報をマイページへ渡す。
   final Map<String, dynamic>? me;
   final String? googleEmail;
+  final String apiBaseUrl;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -20,8 +26,17 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
   List<Widget> get _pages => [
-    TimelineScreen(),
-    IdeasScreen(),
+    // 一覧にもログイン済み状態と共通のAPI接続先を渡す。
+    TimelineScreen(
+      active: _selectedIndex == 0,
+      apiBaseUrl: widget.apiBaseUrl,
+      authenticated: widget.me != null,
+    ),
+    IdeasScreen(
+      active: _selectedIndex == 1,
+      apiBaseUrl: widget.apiBaseUrl,
+      authenticated: widget.me != null,
+    ),
     InboxScreen(),
     ProfileScreen(me: widget.me, googleEmail: widget.googleEmail),
   ];
@@ -29,10 +44,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('EOCURU'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('EOCURU'), centerTitle: true),
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
