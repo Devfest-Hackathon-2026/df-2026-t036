@@ -96,6 +96,8 @@ def _list_inbox(db, uid: str, query: PageQuery) -> InboxPage:
     request = (coll.where(filter=FieldFilter("recipientId", "==", uid))
                .where(filter=FieldFilter("deletedAt", "==", None))
                .where(filter=FieldFilter("expiresAt", ">", now))
+               # 範囲条件の期限を明示し、SDKが文書IDの後へ並び順を追加するのを防ぐ。
+               .order_by("expiresAt", direction=firestore.Query.DESCENDING)
                .order_by("createdAt", direction=firestore.Query.DESCENDING)
                .order_by("__name__", direction=firestore.Query.DESCENDING))
     cursor = _page_query(db, coll, uid, query, "inbox")
