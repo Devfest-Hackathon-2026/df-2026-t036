@@ -6,6 +6,8 @@ import '../theme/page_layout.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/idea_card.dart';
+import '../widgets/masonry_layout.dart';
+import '../widgets/timeline_tag_bar.dart';
 import 'idea_detail_screen.dart';
 import '../theme/app_theme.dart';
 
@@ -50,6 +52,58 @@ class _TimelineScreenState extends State<TimelineScreen> {
     ['月', '花'],
     ['海', '図書館'],
   ];
+  static const _previewTags = [
+    '風景',
+    'ファンタジー',
+    'キャラクター',
+    '日常',
+    '星',
+    '旅',
+    '雨',
+    '空',
+    '月',
+    '花',
+    '海',
+    '図書館',
+  ];
+  String? _selectedTag;
+  final _deletedPreviewIdeas = <String>{};
+  List<Map<String, dynamic>> get _previewIdeas =>
+      List.generate(
+            30,
+            (index) => <String, dynamic>{
+              'ideaId': 'preview-idea-$index',
+              'title':
+                  '${_sampleTitles[index % _sampleTitles.length]} ${index + 1}',
+              'tags': _sampleTags[index % _sampleTags.length],
+              'createdAt': _sampleDate
+                  .subtract(Duration(days: index))
+                  .toIso8601String(),
+              'description': 'このお題に合わせたイラストを描いてみてください。',
+              'publishedUntil': _sampleDate
+                  .add(const Duration(days: 7))
+                  .toIso8601String(),
+              'canPin': index % 5 != 0,
+              'isOwn': index % 5 == 0,
+              'hasDrawn': index % 5 == 1,
+              'canSubmit': index % 5 > 1,
+            },
+          )
+          .where(
+            (idea) =>
+                !_deletedPreviewIdeas.contains(idea['ideaId']) &&
+                (_selectedTag == null ||
+                    (idea['tags'] as List<String>).contains(_selectedTag)),
+          )
+          .toList();
+  int get _previewPageCount => ((_previewIdeas.length + 9) ~/ 10).clamp(1, 3);
+
+  void _selectTag(String? tag) {
+    if (_selectedTag == tag) return;
+    _selectedTag = tag;
+    _loadPage(0);
+  }
+
   late final http.Client _client = widget.client ?? http.Client();
   final _sampleDate = DateTime.now();
   final _scrollController = ScrollController();
@@ -135,33 +189,15 @@ class _TimelineScreenState extends State<TimelineScreen> {
   Future<void> _loadPage(int page, {bool refresh = false}) async {
     // 同じ一覧UIとページ切り替えを、通信なしの30件で確認できる。
     if (_isPreview) {
-      final targetPage = refresh ? 0 : page;
+      final ideas = _previewIdeas;
+      final targetPage = (refresh ? 0 : page).clamp(0, _previewPageCount - 1);
       setState(() {
         _page = targetPage;
         _error = null;
-        // サンプル30件を10件ずつの三ページに分ける。
-        _nextCursor = targetPage < 2 ? 'preview-page-' : null;
-        _ideas = List.generate(10, (offset) {
-          final index = targetPage * 10 + offset;
-          return <String, dynamic>{
-            'ideaId': 'preview-idea-$index',
-            'title':
-                '${_sampleTitles[index % _sampleTitles.length]} ${index + 1}',
-            'tags': _sampleTags[index % _sampleTags.length],
-            'createdAt': _sampleDate
-                .subtract(Duration(days: index))
-                .toIso8601String(),
-            'description': 'このお題に合わせたイラストを描いてみてください。',
-            'publishedUntil': _sampleDate
-                .add(const Duration(days: 7))
-                .toIso8601String(),
-            'canPin': index % 5 != 0,
-            // プレビューでも自分のお題と描いたお題の色を確認できる。
-            'isOwn': index % 5 == 0,
-            'hasDrawn': index % 5 == 1,
-            'canSubmit': index % 5 > 1,
-          };
-        });
+        _nextCursor = targetPage + 1 < _previewPageCount
+            ? 'preview-page-'
+            : null;
+        _ideas = ideas.skip(targetPage * 10).take(10).toList();
       });
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
       return;
@@ -292,10 +328,38 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
     if (!mounted || deleted != true) return;
     if (_isPreview) {
-      setState(() => _ideas.removeWhere((item) => item['ideaId'] == id));
+      _deletedPreviewIdeas.add(id);
+      _loadPage(_page);
     } else {
       await _loadPage(0, refresh: true);
     }
+  }
+
+  Widget _buildIdeaCard(Map<String, dynamic> idea) {
+    final id = idea['ideaId'] as String;
+    final bookmarked = _bookmarks.contains(id);
+    return IdeaCard(
+      key: ValueKey(id),
+      onTap: () => _openDetail(idea),
+      title: idea['title'] as String,
+      borderColor: idea['isOwn'] == true
+          ? AppColors.accentGreen
+          : idea['hasDrawn'] == true
+          ? AppColors.accentYellow
+          : null,
+      backgroundColor: idea['isOwn'] == true
+          ? AppColors.ownIdea
+          : idea['hasDrawn'] == true
+          ? AppColors.drawnIdea
+          : null,
+      tags: (idea['tags'] as List).cast<String>(),
+      date: DateTime.parse(idea['createdAt'] as String),
+      pinned: bookmarked,
+      onPinPressed:
+          _loading || _saving || (!bookmarked && idea['canPin'] != true)
+          ? null
+          : () => _toggleBookmark(id),
+    );
   }
 
   @override
@@ -309,6 +373,37 @@ class _TimelineScreenState extends State<TimelineScreen> {
         constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: Column(
           children: [
+            if (_isPreview) ...[
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  layout.horizontalPadding,
+                  8,
+                  layout.horizontalPadding,
+                  0,
+                ),
+                child: TimelineTagBar(
+                  tags: _previewTags,
+                  selectedTag: _selectedTag,
+                  onSelected: _selectTag,
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  layout.horizontalPadding,
+                  4,
+                  layout.horizontalPadding,
+                  0,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_selectedTag == null ? 'すべて' : '#$_selectedTag'} / ${_previewIdeas.length}件',
+                    key: const ValueKey('timeline-tag-summary'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+            ],
             if (_loading) const LinearProgressIndicator(),
             if (_error != null)
               Padding(
@@ -327,74 +422,69 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 ),
               ),
             Expanded(
-              child: ListView.separated(
-                controller: _scrollController,
-                padding: layout.insets,
-                itemCount: _ideas.length + 1,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  if (index == _ideas.length) {
-                    if (_page == 0 && _nextCursor == null) {
-                      return !_loading && _error == null && _ideas.isEmpty
-                          ? const Center(child: Text('掲載中のお題はありません。'))
-                          : const SizedBox.shrink();
-                    }
-                    // 前後ボタンの代わりに、取得可能なページを番号で選ぶ。
-                    final pageCount = _isPreview ? 3 : _cursors.length;
-                    return Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (var page = 0; page < pageCount; page++)
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(48, 48),
-                              backgroundColor: page == _page
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer
-                                  : null,
-                            ),
-                            onPressed: _loading || _saving || page == _page
-                                ? null
-                                : () => _loadPage(page),
-                            child: Semantics(
-                              selected: page == _page,
-                              label: '${page + 1}ページ',
-                              child: Text('${page + 1}'),
-                            ),
-                          ),
-                      ],
-                    );
-                  }
-                  final idea = _ideas[index];
-                  final id = idea['ideaId'] as String;
-                  final bookmarked = _bookmarks.contains(id);
-                  return IdeaCard(
-                    key: ValueKey(id),
-                    onTap: () => _openDetail(idea),
-                    title: idea['title'] as String,
-                    borderColor: idea['isOwn'] == true
-                        ? AppColors.accentGreen
-                        : idea['hasDrawn'] == true
-                        ? AppColors.accentYellow
-                        : null,
-                    backgroundColor: idea['isOwn'] == true
-                        ? AppColors.ownIdea
-                        : idea['hasDrawn'] == true
-                        ? AppColors.drawnIdea
-                        : null,
-                    tags: (idea['tags'] as List).cast<String>(),
-                    date: DateTime.parse(idea['createdAt'] as String),
-                    pinned: bookmarked,
-                    onPinPressed:
-                        _loading ||
-                            _saving ||
-                            (!bookmarked && idea['canPin'] != true)
-                        ? null
-                        : () => _toggleBookmark(id),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 900
+                      ? 3
+                      : constraints.maxWidth >= 600
+                      ? 2
+                      : 1;
+
+                  return ListView.separated(
+                    controller: _scrollController,
+                    padding: layout.insets,
+                    itemCount: 2,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      if (index == 1) {
+                        if (_page == 0 && _nextCursor == null) {
+                          return !_loading && _error == null && _ideas.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    _selectedTag == null
+                                        ? '掲載中のお題はありません。'
+                                        : 'このタグのお題はありません。',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+                        }
+                        // 前後ボタンの代わりに、取得可能なページを番号で選ぶ。
+                        final pageCount = _isPreview
+                            ? _previewPageCount
+                            : _cursors.length;
+                        return Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (var page = 0; page < pageCount; page++)
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(48, 48),
+                                  backgroundColor: page == _page
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer
+                                      : null,
+                                ),
+                                onPressed: _loading || _saving || page == _page
+                                    ? null
+                                    : () => _loadPage(page),
+                                child: Semantics(
+                                  selected: page == _page,
+                                  label: '${page + 1}ページ',
+                                  child: Text('${page + 1}'),
+                                ),
+                              ),
+                          ],
+                        );
+                      }
+                      return MasonryLayout(
+                        columns: columns,
+                        children: _ideas.map(_buildIdeaCard).toList(),
+                      );
+                    },
                   );
                 },
               ),
