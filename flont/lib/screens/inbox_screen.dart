@@ -42,6 +42,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   List<ReceivedArtwork> _inbox = [];
   final _previewReadAt = <String, DateTime>{};
   final _previewLikes = <String>{};
+  final _previewDeleted = <String>{};
   String? _nextCursor;
   String? _error;
   bool _loading = false;
@@ -286,22 +287,31 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   Future<void> _openArtwork(ReceivedArtwork artwork) async {
     _detailOpen = true;
     _pause();
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) => ArtworkDetailScreen(
           artwork: artwork,
           now: () => _now,
           imageLoader: _isPreview
               ? () => createPreviewArtwork(
-                  _artworks.indexWhere(
-                    (item) => item.submissionId == artwork.submissionId,
-                  ),
+                  int.tryParse(artwork.submissionId!.split('-').last) ?? 0,
                 )
               : null,
           onLike: artwork.submissionId == null
               ? null
               : () => _likeArtwork(artwork),
           allowFileActions: _isPreview,
+          onDelete: _isPreview
+              ? () async {
+                  if (!mounted) {
+                    throw StateError('Inbox is no longer available');
+                  }
+                  setState(() {
+                    _previewDeleted.add(artwork.submissionId!);
+                    _resetPage();
+                  });
+                }
+              : null,
           onMarkRead: artwork.submissionId == null
               ? null
               : () => _markArtworkRead(artwork),
@@ -440,19 +450,25 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
         '月明かりに照らされた青い花を描いてほしいです。',
       ];
       return List.generate(titles.length, (index) {
-        final receivedAt = _previewReceivedAt.subtract(Duration(days: index));
-        return ReceivedArtwork(
-          submissionId: 'preview-artwork-$index',
-          readAt: _previewReadAt['preview-artwork-$index'],
-          title: titles[index],
-          description: descriptions[index],
-          tags: const ['風景', 'ファンタジー'],
-          artistNickname: '描き手 ${index + 1}',
-          createdAt: receivedAt,
-          expiresAt: receivedAt.add(const Duration(days: 7)),
-          liked: index == 1 || _previewLikes.contains('preview-artwork-$index'),
-        );
-      });
+            final receivedAt = _previewReceivedAt.subtract(
+              Duration(days: index),
+            );
+            return ReceivedArtwork(
+              submissionId: 'preview-artwork-$index',
+              readAt: _previewReadAt['preview-artwork-$index'],
+              title: titles[index],
+              description: descriptions[index],
+              tags: const ['風景', 'ファンタジー'],
+              artistNickname: '描き手 ${index + 1}',
+              createdAt: receivedAt,
+              expiresAt: receivedAt.add(const Duration(days: 7)),
+              liked:
+                  index == 1 ||
+                  _previewLikes.contains('preview-artwork-$index'),
+            );
+          })
+          .where((artwork) => !_previewDeleted.contains(artwork.submissionId))
+          .toList();
     }
     if (widget.authenticated) return _inbox;
     if (widget.artworks.isNotEmpty) return widget.artworks;

@@ -18,6 +18,7 @@ class ArtworkDetailScreen extends StatefulWidget {
     this.onLike,
     this.allowFileActions = false,
     this.onSave,
+    this.onDelete,
   });
 
   final ReceivedArtwork artwork;
@@ -27,6 +28,7 @@ class ArtworkDetailScreen extends StatefulWidget {
   final Future<void> Function()? onLike;
   final bool allowFileActions;
   final Future<void> Function(Uint8List bytes)? onSave;
+  final Future<void> Function()? onDelete;
 
   @override
   State<ArtworkDetailScreen> createState() => _ArtworkDetailScreenState();
@@ -41,9 +43,18 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
   bool _imageVisible = false;
   bool _reading = false;
   bool _acting = false;
+  bool _deleting = false;
+  bool _confirmingDelete = false;
+  String? _deleteError;
   late bool _liked = artwork.liked == true;
   String? _actionError;
-  bool get _canAct => !_expired && _imageVisible && _bytes != null && !_acting;
+  bool get _canAct =>
+      !_expired &&
+      _imageVisible &&
+      _bytes != null &&
+      !_acting &&
+      !_deleting &&
+      !_confirmingDelete;
 
   bool _expired = false;
   String? _imageError;
@@ -122,6 +133,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
         !_imageVisible ||
         _reading ||
         _readAt != null ||
+        _deleting ||
         widget.onMarkRead == null) {
       return;
     }
@@ -179,6 +191,62 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
       if (mounted) setState(() => _actionError = '画像を保存できませんでした。');
     } finally {
       if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    if (widget.onDelete == null ||
+        _expired ||
+        _acting ||
+        _deleting ||
+        _confirmingDelete) {
+      return;
+    }
+    setState(() => _confirmingDelete = true);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('受信作品を削除しますか？'),
+        content: const Text(
+          'この作品は受信箱から消え、閲覧できなくなります。元のお題や描き手の履歴・実績、付いたいいねは残ります。削除は取り消せません。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            key: const ValueKey('artwork-delete-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _confirmingDelete = false);
+    if (confirmed != true || _expired) return;
+    setState(() {
+      _deleting = true;
+      _deleteError = null;
+    });
+    try {
+      await widget.onDelete!();
+      if (!mounted) return;
+      _bytes = null;
+      _imageVisible = false;
+      // Enable the route's programmatic pop after the pending operation finishes.
+      setState(() => _deleting = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop(true);
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _deleting = false;
+          _deleteError = '作品を削除できませんでした。再度お試しください。';
+        });
+      }
     }
   }
 
@@ -258,88 +326,123 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
   Widget build(BuildContext context) {
     final layout = PageLayout.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('受信作品詳細')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: layout.bodyWidth),
-          child: ListView(
-            padding: layout.insets,
-            children: [
-              Text(artwork.title, style: textTheme.headlineSmall),
-              const SizedBox(height: 16),
-              ArtworkActions(
-                liked: _liked,
-                onLike: _canAct && !_liked && widget.onLike != null
-                    ? _like
-                    : null,
-                onSave: _canAct && widget.allowFileActions ? _saveImage : null,
-                child: _image(),
-              ),
-              const SizedBox(height: 8),
-              const Text('いいねは取り消せません。', textAlign: TextAlign.center),
-              if (_acting) const LinearProgressIndicator(),
-              if (_actionError != null)
-                Text(
-                  _actionError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+    return PopScope(
+      canPop: !_deleting,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('受信作品詳細')),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: layout.bodyWidth),
+            child: ListView(
+              padding: layout.insets,
+              children: [
+                Text(artwork.title, style: textTheme.headlineSmall),
+                const SizedBox(height: 16),
+                ArtworkActions(
+                  liked: _liked,
+                  onLike: _canAct && !_liked && widget.onLike != null
+                      ? _like
+                      : null,
+                  onSave: _canAct && widget.allowFileActions
+                      ? _saveImage
+                      : null,
+                  child: _image(),
                 ),
-              if (_readError != null && !_expired)
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(_readError!),
-                    TextButton(
-                      onPressed: _reading ? null : _markRead,
-                      child: const Text('既読を再試行'),
+                const SizedBox(height: 8),
+                const Text('いいねは取り消せません。', textAlign: TextAlign.center),
+                if (_acting) const LinearProgressIndicator(),
+                if (_actionError != null)
+                  Text(
+                    _actionError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
-                  ],
-                ),
-              const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                if (_readError != null && !_expired)
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text('作品情報', style: textTheme.titleMedium),
-                      const SizedBox(height: 12),
-                      _info(context, '作者', artwork.artistNickname ?? '未取得'),
-                      _info(context, '受信日時', _date(artwork.createdAt)),
-                      _info(context, '閲覧期限', _date(artwork.expiresAt)),
-                      _info(context, '残り時間', _remaining),
-                      _info(context, '閲覧状態', _readAt == null ? '未読' : '既読'),
-                      _info(
-                        context,
-                        'いいね',
-                        artwork.liked == null && !_liked
-                            ? '未取得'
-                            : _liked
-                            ? 'いいね済み'
-                            : '未送信',
+                      Text(_readError!),
+                      TextButton(
+                        onPressed: _reading ? null : _markRead,
+                        child: const Text('既読を再試行'),
                       ),
                     ],
                   ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('作品情報', style: textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        _info(context, '作者', artwork.artistNickname ?? '未取得'),
+                        _info(context, '受信日時', _date(artwork.createdAt)),
+                        _info(context, '閲覧期限', _date(artwork.expiresAt)),
+                        _info(context, '残り時間', _remaining),
+                        _info(context, '閲覧状態', _readAt == null ? '未読' : '既読'),
+                        _info(
+                          context,
+                          'いいね',
+                          artwork.liked == null && !_liked
+                              ? '未取得'
+                              : _liked
+                              ? 'いいね済み'
+                              : '未送信',
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text('元のお題', style: textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                artwork.description ?? 'お題の説明は未取得です。',
-                style: textTheme.bodyLarge?.copyWith(height: 1.7),
-              ),
-              if (artwork.tags.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (final tag in artwork.tags) Chip(label: Text(tag)),
-                  ],
+                const SizedBox(height: 20),
+                Text('元のお題', style: textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Text(
+                  artwork.description ?? 'お題の説明は未取得です。',
+                  style: textTheme.bodyLarge?.copyWith(height: 1.7),
                 ),
+                if (artwork.tags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final tag in artwork.tags) Chip(label: Text(tag)),
+                    ],
+                  ),
+                ],
+                if (widget.onDelete != null) ...[
+                  const SizedBox(height: 28),
+                  if (_deleteError != null)
+                    Text(
+                      _deleteError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('artwork-delete-button'),
+                    onPressed:
+                        _deleting || _confirmingDelete || _acting || _expired
+                        ? null
+                        : _confirmDelete,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    icon: _deleting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline),
+                    label: Text(_deleting ? '削除中…' : '作品を削除'),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
