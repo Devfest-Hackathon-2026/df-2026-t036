@@ -99,7 +99,9 @@ void main() {
       await tester.tap(find.byTooltip('次の作品'));
       await tester.pumpAndSettle();
       expect(find.text('Second'), findsOneWidget);
-      await tester.tap(find.byTooltip('受信箱を更新'));
+      // 更新ボタンの代わりに、受信箱へ戻った際の自動再取得を検証する。
+      await tester.pumpWidget(screen(client, active: false));
+      await tester.pumpWidget(screen(client));
       await tester.pumpAndSettle();
       expect(find.text('Fresh'), findsOneWidget);
       expect(find.text('Second'), findsNothing);
@@ -120,7 +122,9 @@ void main() {
       });
       await tester.pumpWidget(screen(client));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('受信箱を更新'));
+      // 更新ボタンの代わりに、受信箱へ戻った際の自動再取得を検証する。
+      await tester.pumpWidget(screen(client, active: false));
+      await tester.pumpWidget(screen(client));
       await tester.pumpAndSettle();
       expect(find.text('Existing'), findsOneWidget);
       expect(find.text('temporary-error'), findsOneWidget);

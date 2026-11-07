@@ -40,6 +40,14 @@ void main() {
     );
     final size = tester.getSize(find.byType(IdeaSlotCard));
     expect(size.width / size.height, closeTo(3 / 4, 0.001));
+    // 一枚と複数枚で、中央のカード領域が同じ寸法になることを確認する。
+    final single = tester.getSize(find.byType(PageView));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: InboxScreen(artworkTitles: ['作品A', '作品B'])),
+      ),
+    );
+    expect(tester.getSize(find.byType(PageView)), single);
   });
   // 作品数に応じた操作表示と、実際に次の作品へ移れることを確認する。
   testWidgets('一作品では切り替えフッターを表示しない', (tester) async {

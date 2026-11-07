@@ -76,7 +76,9 @@ void main() {
     await tester.pumpWidget(screen(client));
     await tester.pumpAndSettle();
     fail = true;
-    await tester.tap(find.byTooltip('累計を更新'));
+    // 手動更新ボタンを使わず、タブ復帰による再取得を確認する。
+    await tester.pumpWidget(screen(client, active: false));
+    await tester.pumpWidget(screen(client));
     await tester.pumpAndSettle();
     expect(card(tester).ideaCount, 7);
     expect(find.text('再試行'), findsOneWidget);

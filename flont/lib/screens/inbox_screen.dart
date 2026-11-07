@@ -570,21 +570,9 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '受信箱',
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                        ),
-                        if (widget.authenticated && !_isPreview)
-                          IconButton(
-                            tooltip: '受信箱を更新',
-                            onPressed: _loading ? null : _loadInbox,
-                            icon: const Icon(Icons.refresh),
-                          ),
-                      ],
+                    Text(
+                      '受信箱',
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     if (_loading) const LinearProgressIndicator(),
                     if (_error != null)
@@ -613,30 +601,23 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                               constraints: BoxConstraints(
                                 maxWidth: layout.contentWidth,
                               ),
-                              // 幅に合わせて高さを決め、横3・縦4を維持する。
-                              child: AspectRatio(
-                                aspectRatio: 3 / 4,
-                                child: titles.isEmpty
-                                    ? _fitCard(
-                                        Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 0,
-                                            vertical: 0,
-                                          ),
-                                          child: IdeaSlotCard(
-                                            slotNumber: 1,
-                                            label: '受信作品',
-                                            emptyText: _loading
-                                                ? '読み込み中…'
-                                                : _error != null
-                                                ? '受信作品を表示できません'
-                                                : 'まだ作品は届いていません',
-                                            emptyIcon: Icons.inbox_outlined,
-                                          ),
-                                        ),
-                                      )
-                                    : _buildCarousel(titles),
-                              ),
+                              // 空の受信箱はカードの情報欄を出さず、中央の案内だけを表示する。
+                              child: titles.isEmpty
+                                  ? Text(
+                                      _loading
+                                          ? '読み込み中…'
+                                          : _error != null
+                                          ? '受信作品を表示できません'
+                                          : 'まだ作品は届いていません',
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyLarge,
+                                    )
+                                  : AspectRatio(
+                                      aspectRatio: 3 / 4,
+                                      child: _buildCarousel(titles),
+                                    ),
                             ),
                           ),
                           // 一作品の場合は切り替え操作を表示しない。
@@ -652,6 +633,8 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                             : () => _loadInbox(append: true),
                         child: const Text('さらに読み込む'),
                       ),
+                    // 一枚でも切替操作と同じ高さを確保し、複数枚とカード寸法をそろえる。
+                    if (titles.length == 1) const SizedBox(height: 48),
                     if (titles.length > 1) ...[
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,

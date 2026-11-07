@@ -186,12 +186,6 @@ class _ProfileScreenState extends State<ProfileScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('マイページ', style: Theme.of(context).textTheme.headlineSmall),
-                // 表示中にも手動で最新の累計を確認できる。
-                IconButton(
-                  tooltip: '累計を更新',
-                  onPressed: _canLoad && !_loading ? _refresh : null,
-                  icon: const Icon(Icons.refresh),
-                ),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   onPressed: () {
