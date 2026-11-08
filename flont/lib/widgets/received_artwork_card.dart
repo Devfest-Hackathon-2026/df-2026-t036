@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
+const _envelopeRadius = BorderRadius.vertical(bottom: Radius.circular(18));
+
 /// Presentation only: read status is supplied by the inbox.
 class ReceivedArtworkCard extends StatelessWidget {
   const ReceivedArtworkCard({
@@ -28,7 +30,7 @@ class ReceivedArtworkCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: _envelopeRadius,
         border: Border.all(
           color: isUnread ? AppColors.main : AppColors.outline,
         ),
@@ -172,9 +174,7 @@ class _EnvelopeBodyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
-    canvas.clipRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
-    );
+    canvas.clipRRect(_envelopeRadius.toRRect(Offset.zero & size));
     final crease = Paint()
       ..color = AppColors.outline.withValues(alpha: 0.65)
       ..style = PaintingStyle.stroke
@@ -199,24 +199,20 @@ class _EnvelopeFlapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
-    canvas.clipRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
-    );
+    canvas.clipRRect(_envelopeRadius.toRRect(Offset.zero & size));
     final fold = Offset(size.width / 2, size.height * 0.37);
     final flap = Path()
       ..moveTo(0, 0)
       ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height * 0.10)
       ..lineTo(fold.dx, fold.dy)
-      ..lineTo(0, size.height * 0.10)
       ..close();
     canvas.drawShadow(flap, AppColors.sub.withValues(alpha: 0.08), 1.5, false);
     canvas.drawPath(flap, Paint()..color = AppColors.surface);
     canvas.drawPath(
       Path()
-        ..moveTo(0, size.height * 0.10)
+        ..moveTo(0, 0)
         ..lineTo(fold.dx, fold.dy)
-        ..lineTo(size.width, size.height * 0.10),
+        ..lineTo(size.width, 0),
       Paint()
         ..color = AppColors.outline
         ..style = PaintingStyle.stroke

@@ -61,6 +61,26 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
   String? _readError;
   late DateTime? _readAt = artwork.readAt;
   Timer? _expiryTimer;
+  Animation<double>? _routeAnimation;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final animation = ModalRoute.of(context)?.animation;
+    if (identical(animation, _routeAnimation)) return;
+    _routeAnimation?.removeStatusListener(_onRouteStatus);
+    _routeAnimation = animation;
+    _routeAnimation?.addStatusListener(_onRouteStatus);
+  }
+
+  void _onRouteStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _markRead();
+      });
+    }
+  }
+
   int _imageGeneration = 0;
 
   @override
@@ -97,6 +117,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
   void dispose() {
     _imageGeneration++;
     _expiryTimer?.cancel();
+    _routeAnimation?.removeStatusListener(_onRouteStatus);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -130,6 +151,8 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
 
   Future<void> _markRead() async {
     if (_expired ||
+        (_routeAnimation != null && !_routeAnimation!.isCompleted) ||
+        !(ModalRoute.of(context)?.isCurrent ?? true) ||
         !_imageVisible ||
         _reading ||
         _readAt != null ||

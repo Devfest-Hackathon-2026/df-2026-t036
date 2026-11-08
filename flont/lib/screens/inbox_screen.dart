@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
 import '../theme/app_theme.dart';
 import '../widgets/received_artwork_card.dart';
+import '../widgets/artwork_opening_route.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
@@ -312,11 +313,27 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openArtwork(ReceivedArtwork artwork) async {
+  final _cardKeys = <int, GlobalKey>{};
+
+  Future<void> _openArtwork(ReceivedArtwork artwork, int index) async {
+    if (_detailOpen) return;
+    final cardBox = _cardKeys[index]?.currentContext?.findRenderObject();
+    final navigatorBox = Navigator.of(
+      context,
+    ).overlay?.context.findRenderObject();
+    if (cardBox is! RenderBox || navigatorBox is! RenderBox) return;
+    final sourceRect =
+        navigatorBox.globalToLocal(cardBox.localToGlobal(Offset.zero)) &
+        cardBox.size;
     _detailOpen = true;
     _pause();
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+      ArtworkOpeningRoute(
+        sourceRect: sourceRect,
+        title: artwork.title,
+        label: '受信作品 ${index + 1}',
+        isUnread: artwork.readAt == null,
+        reduceMotion: MediaQuery.disableAnimationsOf(context),
         builder: (_) => ArtworkDetailScreen(
           artwork: artwork,
           now: () => _now,
@@ -461,7 +478,8 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                         isDragging: (_pointer != null || moving) && weight > 0,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => _openArtwork(_artworks[index]),
+                          key: _cardKeys.putIfAbsent(index, () => GlobalKey()),
+                          onTap: () => _openArtwork(_artworks[index], index),
                           child: _fitCard(
                             ReceivedArtworkCard(
                               label: '受信作品 ${index + 1}',

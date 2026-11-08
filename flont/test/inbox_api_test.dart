@@ -78,6 +78,32 @@ void main() {
       client.close();
     });
 
+    testWidgets('double tap opens one detail and fetches the image once', (
+      tester,
+    ) async {
+      var images = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/image')) {
+          images++;
+          return http.Response('', 404);
+        }
+        return page('Received idea');
+      });
+      await tester.pumpWidget(screen(client));
+      await tester.pumpAndSettle();
+      final position = tester.getCenter(find.text('Received idea'));
+      await tester.tapAt(position);
+      await tester.tapAt(position);
+      await tester.pumpAndSettle();
+      expect(images, 1);
+      expect(find.byType(ArtworkDetailScreen), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtworkDetailScreen), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      client.close();
+    });
+
     testWidgets('pagination uses cursor and refresh discards old pages', (
       tester,
     ) async {
