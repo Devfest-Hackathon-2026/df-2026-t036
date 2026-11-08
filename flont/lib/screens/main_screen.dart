@@ -39,6 +39,7 @@ class _MainScreenState extends State<MainScreen> {
       authenticated: widget.me != null,
     ),
     InboxScreen(
+      userId: widget.me?['uid'] as String?,
       active: _selectedIndex == 2,
       authenticated: widget.me != null,
       apiBaseUrl: widget.apiBaseUrl,

@@ -14,6 +14,7 @@ import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
 import '../models/received_artwork.dart';
 import '../preview/artwork_preview.dart';
+import '../services/artwork_image_cache.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({
@@ -25,6 +26,7 @@ class InboxScreen extends StatefulWidget {
     this.active = true,
     this.client,
     this.idTokenProvider,
+    this.userId,
   });
 
   // 実データの接続時は受信作品のタイトルを渡せる。
@@ -35,6 +37,7 @@ class InboxScreen extends StatefulWidget {
   final bool active;
   final http.Client? client;
   final Future<String?> Function()? idTokenProvider;
+  final String? userId;
 
   @override
   State<InboxScreen> createState() => _InboxScreenState();
@@ -42,6 +45,7 @@ class InboxScreen extends StatefulWidget {
 
 class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   late final http.Client _client = widget.client ?? http.Client();
+  late final _imageCache = ArtworkImageCache(now: () => _now);
   List<ReceivedArtwork> _inbox = [];
   final _previewReadAt = <String, DateTime>{};
   final _previewLikes = <String>{};
@@ -119,6 +123,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           _inbox.removeWhere((item) => !item.expiresAt!.isAfter(_now));
           _resetPage();
         });
+        _retainCachedImages();
         _scheduleExpiry();
       },
     );
@@ -154,6 +159,9 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           .timeout(const Duration(seconds: 30));
       if (!mounted || generation != _generation) return;
       if (response.statusCode != 200) {
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          _imageCache.clear();
+        }
         final seconds = int.tryParse(response.headers['retry-after'] ?? '');
         if (seconds != null && seconds > 0) {
           _retryAfter = Duration(seconds: seconds);
@@ -186,6 +194,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
         _failures = 0;
         if (!append) _resetPage();
       });
+      _retainCachedImages();
       _scheduleExpiry();
     } catch (error) {
       if (mounted && generation == _generation) {
@@ -287,6 +296,24 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _retainCachedImages() {
+    _imageCache.retain({
+      for (final artwork in _artworks)
+        if (artwork.submissionId != null) artwork.submissionId!,
+    });
+  }
+
+  Future<Uint8List> _cachedArtworkImage(ReceivedArtwork artwork) {
+    Future<Uint8List> load() => _isPreview
+        ? createPreviewArtwork(
+            int.tryParse(artwork.submissionId!.split('-').last) ?? 0,
+          )
+        : _loadArtworkImage(artwork);
+    final id = artwork.submissionId;
+    if (id == null) return load();
+    return _imageCache.load(id, expiresAt: artwork.expiresAt, loader: load);
+  }
+
   Future<Uint8List> _loadArtworkImage(ReceivedArtwork artwork) async {
     var active = true;
     try {
@@ -337,11 +364,12 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
         builder: (_) => ArtworkDetailScreen(
           artwork: artwork,
           now: () => _now,
-          imageLoader: _isPreview
-              ? () => createPreviewArtwork(
-                  int.tryParse(artwork.submissionId!.split('-').last) ?? 0,
-                )
-              : () => _loadArtworkImage(artwork),
+          imageLoader: () => _cachedArtworkImage(artwork),
+          onImageInvalid: () {
+            if (artwork.submissionId != null) {
+              _imageCache.remove(artwork.submissionId!);
+            }
+          },
           onLike: artwork.submissionId == null
               ? null
               : () => _likeArtwork(artwork),
@@ -353,6 +381,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                   }
                   setState(() {
                     _previewDeleted.add(artwork.submissionId!);
+                    _imageCache.remove(artwork.submissionId!);
                     _resetPage();
                   });
                 }
@@ -549,6 +578,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     _expiryTimer?.cancel();
+    _imageCache.clear();
     if (widget.client == null) _client.close();
     _controller.dispose();
     super.dispose();
@@ -558,7 +588,9 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   void didUpdateWidget(covariant InboxScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.apiBaseUrl != widget.apiBaseUrl ||
-        oldWidget.authenticated != widget.authenticated) {
+        oldWidget.authenticated != widget.authenticated ||
+        oldWidget.userId != widget.userId) {
+      _imageCache.clear();
       _pause();
       _expiryTimer?.cancel();
       _inbox = [];
