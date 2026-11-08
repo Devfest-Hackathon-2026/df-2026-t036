@@ -22,12 +22,12 @@ abstract final class AppColors {
     HSLColor.fromColor(main).withHue(275).toColor(),
   ];
   static const sub = Color(0xFF173C70);
-  static const background = Color(0xFFFFFFFF);
-  static const surface = Color(0xFFF7FBFF);
-  static const text = Color(0xFF000000);
+  static const background = Color(0xFFF8FBFD);
+  static const surface = Color(0xFFFFFFFF);
+  static const text = sub;
   // 補助色は基本パレットから派生させ、画面ごとの色追加を防ぐ。
-  static const muted = Color(0xFF4C617D);
-  static const outline = Color(0xFFBDD2E4);
+  static const muted = Color(0xFF66788A);
+  static const outline = Color(0xFFDCEAF2);
   static const shadow = Color(0x14173C70);
 }
 
@@ -66,7 +66,35 @@ abstract final class AppTheme {
     final base = ThemeData(useMaterial3: true, colorScheme: colors);
     // 現在のgoogle_fontsとFlutterのTextTheme型の差を避けて書体を適用する。
     final family = GoogleFonts.mPlusRounded1c().fontFamily;
-    final textTheme = base.textTheme.apply(fontFamily: family);
+    final rounded = base.textTheme.apply(fontFamily: family);
+    final textTheme = rounded.copyWith(
+      headlineSmall: rounded.headlineSmall?.copyWith(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        height: 1.4,
+      ),
+      titleLarge: rounded.titleLarge?.copyWith(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        height: 1.4,
+      ),
+      titleMedium: rounded.titleMedium?.copyWith(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        height: 1.5,
+      ),
+      bodyLarge: rounded.bodyLarge?.copyWith(fontSize: 16, height: 1.7),
+      bodyMedium: rounded.bodyMedium?.copyWith(fontSize: 14, height: 1.65),
+      bodySmall: rounded.bodySmall?.copyWith(
+        fontSize: 12,
+        height: 1.5,
+        color: AppColors.muted,
+      ),
+      labelLarge: rounded.labelLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        height: 1.4,
+      ),
+    );
     final controlShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(controlRadius),
     );
@@ -75,12 +103,16 @@ abstract final class AppTheme {
       textTheme: textTheme,
       primaryTextTheme: base.primaryTextTheme.apply(fontFamily: family),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.sub,
-        foregroundColor: AppColors.background,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.sub,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(bottom: BorderSide(color: AppColors.outline)),
         surfaceTintColor: Colors.transparent,
         centerTitle: true,
         titleTextStyle: textTheme.titleLarge?.copyWith(
-          color: AppColors.background,
+          color: AppColors.sub,
+          letterSpacing: 1.6,
         ),
       ),
       cardTheme: CardThemeData(
@@ -122,7 +154,24 @@ abstract final class AppTheme {
           borderSide: const BorderSide(color: AppColors.outline),
         ),
       ),
-      navigationBarTheme: const NavigationBarThemeData(
+      navigationBarTheme: NavigationBarThemeData(
+        elevation: 0,
+        height: 80,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        iconTheme: const WidgetStatePropertyAll(
+          IconThemeData(size: 24, color: AppColors.sub),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => textTheme.labelMedium?.copyWith(
+            fontSize: 12,
+            color: states.contains(WidgetState.selected)
+                ? AppColors.sub
+                : AppColors.muted,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+          ),
+        ),
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         indicatorColor: AppColors.main,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
 import 'timeline_screen.dart';
 import 'ideas_screen.dart';
 import 'inbox_screen.dart';
@@ -38,6 +39,7 @@ class _MainScreenState extends State<MainScreen> {
       authenticated: widget.me != null,
     ),
     InboxScreen(
+      userId: widget.me?['uid'] as String?,
       active: _selectedIndex == 2,
       authenticated: widget.me != null,
       apiBaseUrl: widget.apiBaseUrl,
@@ -54,37 +56,53 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('EWOCURU'), centerTitle: true),
+      appBar: AppBar(
+        // ヘッダーの高さに収め、読み上げ用のサービス名も保持する。
+        title: Image.asset(
+          'assets/images/logo.png',
+          width: 120,
+          height: 52,
+          fit: BoxFit.contain,
+          semanticLabel: 'EWOCURU',
+        ),
+        centerTitle: true,
+      ),
       body: IndexedStack(index: _selectedIndex, children: _pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.schedule_outlined),
-            selectedIcon: Icon(Icons.schedule),
-            label: 'タイムライン',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.lightbulb_outline),
-            selectedIcon: Icon(Icons.lightbulb),
-            label: 'アイデア',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inbox_outlined),
-            selectedIcon: Icon(Icons.inbox),
-            label: '受信箱',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'マイページ',
-          ),
-        ],
+      bottomNavigationBar: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.outline)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.schedule_rounded),
+              selectedIcon: Icon(Icons.schedule_rounded),
+              label: 'タイムライン',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.lightbulb_outline_rounded),
+              selectedIcon: Icon(Icons.lightbulb_rounded),
+              label: 'アイデア',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.inbox_outlined),
+              selectedIcon: Icon(Icons.inbox_rounded),
+              label: '受信箱',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'マイページ',
+            ),
+          ],
+        ),
       ),
     );
   }

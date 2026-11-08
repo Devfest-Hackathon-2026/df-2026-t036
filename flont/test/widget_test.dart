@@ -293,7 +293,10 @@ void main() {
     await tester.pumpWidget(const IllustrationExchangeApp(home: MainScreen()));
 
     // 上部のアプリ名を確認
-    expect(find.text('EWOCURU'), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/images/logo.png')),
+      findsOneWidget,
+    );
 
     // 下部の4つのナビゲーションを確認
     expect(find.text('タイムライン'), findsOneWidget);

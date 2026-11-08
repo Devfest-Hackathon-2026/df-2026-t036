@@ -6,11 +6,15 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../theme/app_theme.dart';
+import '../widgets/received_artwork_card.dart';
+import '../widgets/artwork_opening_route.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
 import '../models/received_artwork.dart';
 import '../preview/artwork_preview.dart';
+import '../services/artwork_image_cache.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({
@@ -22,6 +26,7 @@ class InboxScreen extends StatefulWidget {
     this.active = true,
     this.client,
     this.idTokenProvider,
+    this.userId,
   });
 
   // 実データの接続時は受信作品のタイトルを渡せる。
@@ -32,6 +37,7 @@ class InboxScreen extends StatefulWidget {
   final bool active;
   final http.Client? client;
   final Future<String?> Function()? idTokenProvider;
+  final String? userId;
 
   @override
   State<InboxScreen> createState() => _InboxScreenState();
@@ -39,6 +45,7 @@ class InboxScreen extends StatefulWidget {
 
 class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   late final http.Client _client = widget.client ?? http.Client();
+  late final _imageCache = ArtworkImageCache(now: () => _now);
   List<ReceivedArtwork> _inbox = [];
   final _previewReadAt = <String, DateTime>{};
   final _previewLikes = <String>{};
@@ -116,6 +123,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           _inbox.removeWhere((item) => !item.expiresAt!.isAfter(_now));
           _resetPage();
         });
+        _retainCachedImages();
         _scheduleExpiry();
       },
     );
@@ -151,6 +159,9 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           .timeout(const Duration(seconds: 30));
       if (!mounted || generation != _generation) return;
       if (response.statusCode != 200) {
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          _imageCache.clear();
+        }
         final seconds = int.tryParse(response.headers['retry-after'] ?? '');
         if (seconds != null && seconds > 0) {
           _retryAfter = Duration(seconds: seconds);
@@ -183,6 +194,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
         _failures = 0;
         if (!append) _resetPage();
       });
+      _retainCachedImages();
       _scheduleExpiry();
     } catch (error) {
       if (mounted && generation == _generation) {
@@ -284,6 +296,24 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _retainCachedImages() {
+    _imageCache.retain({
+      for (final artwork in _artworks)
+        if (artwork.submissionId != null) artwork.submissionId!,
+    });
+  }
+
+  Future<Uint8List> _cachedArtworkImage(ReceivedArtwork artwork) {
+    Future<Uint8List> load() => _isPreview
+        ? createPreviewArtwork(
+            int.tryParse(artwork.submissionId!.split('-').last) ?? 0,
+          )
+        : _loadArtworkImage(artwork);
+    final id = artwork.submissionId;
+    if (id == null) return load();
+    return _imageCache.load(id, expiresAt: artwork.expiresAt, loader: load);
+  }
+
   Future<Uint8List> _loadArtworkImage(ReceivedArtwork artwork) async {
     var active = true;
     try {
@@ -310,19 +340,36 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openArtwork(ReceivedArtwork artwork) async {
+  final _cardKeys = <int, GlobalKey>{};
+
+  Future<void> _openArtwork(ReceivedArtwork artwork, int index) async {
+    if (_detailOpen) return;
+    final cardBox = _cardKeys[index]?.currentContext?.findRenderObject();
+    final navigatorBox = Navigator.of(
+      context,
+    ).overlay?.context.findRenderObject();
+    if (cardBox is! RenderBox || navigatorBox is! RenderBox) return;
+    final sourceRect =
+        navigatorBox.globalToLocal(cardBox.localToGlobal(Offset.zero)) &
+        cardBox.size;
     _detailOpen = true;
     _pause();
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+      ArtworkOpeningRoute(
+        sourceRect: sourceRect,
+        title: artwork.title,
+        label: '受信作品 ${index + 1}',
+        isUnread: artwork.readAt == null,
+        reduceMotion: MediaQuery.disableAnimationsOf(context),
         builder: (_) => ArtworkDetailScreen(
           artwork: artwork,
           now: () => _now,
-          imageLoader: _isPreview
-              ? () => createPreviewArtwork(
-                  int.tryParse(artwork.submissionId!.split('-').last) ?? 0,
-                )
-              : () => _loadArtworkImage(artwork),
+          imageLoader: () => _cachedArtworkImage(artwork),
+          onImageInvalid: () {
+            if (artwork.submissionId != null) {
+              _imageCache.remove(artwork.submissionId!);
+            }
+          },
           onLike: artwork.submissionId == null
               ? null
               : () => _likeArtwork(artwork),
@@ -334,6 +381,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                   }
                   setState(() {
                     _previewDeleted.add(artwork.submissionId!);
+                    _imageCache.remove(artwork.submissionId!);
                     _resetPage();
                   });
                 }
@@ -349,7 +397,8 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     if (_canFetch) _loadInbox();
   }
 
-  final _controller = PageController();
+  static const _viewportFraction = 0.72;
+  var _controller = PageController(viewportFraction: _viewportFraction);
   int _page = 0;
   final _gestureKey = GlobalKey();
   int? _pointer;
@@ -391,7 +440,25 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     },
   );
 
-  Widget _buildCarousel(List<String> titles) {
+  Widget _buildCarousel(List<String> titles) => LayoutBuilder(
+    builder: (context, space) {
+      final fraction = (space.maxHeight * 3 / 4 / space.maxWidth).clamp(
+        0.01,
+        _viewportFraction,
+      );
+      if ((_controller.viewportFraction - fraction).abs() > 0.0001) {
+        final previous = _controller;
+        _controller = PageController(
+          initialPage: _page,
+          viewportFraction: fraction,
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+      }
+      return _buildCarouselPages(titles);
+    },
+  );
+
+  Widget _buildCarouselPages(List<String> titles) {
     return Listener(
       key: _gestureKey,
       onPointerDown: (event) {
@@ -419,6 +486,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
               },
             ),
             child: PageView.builder(
+              key: ObjectKey(_controller),
               clipBehavior: Clip.none,
               controller: _controller,
               physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
@@ -427,28 +495,27 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
               itemBuilder: (context, index) {
                 final weight = (1.0 - (page - index).abs()).clamp(0.0, 1.0);
                 final offset = (page - index).clamp(-1.0, 1.0);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 0,
-                    vertical: 0,
-                  ),
-                  child: TiltCard(
-                    key: ValueKey('inbox-tilt-$index'),
-                    rotationX: _rotationX * weight,
-                    rotationY: -offset * 0.16,
-                    isDragging: (_pointer != null || moving) && weight > 0,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _openArtwork(_artworks[index]),
-                      child: _fitCard(
-                        IdeaSlotCard(
-                          slotNumber: index + 1,
-                          label: '受信作品 ${index + 1}',
-                          title: titles[index],
-                          subtitle: _artworks[index].readAt == null
-                              ? '未読'
-                              : '既読',
-                          icon: Icons.image_outlined,
+                return Center(
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: Padding(
+                      padding: EdgeInsets.zero,
+                      child: TiltCard(
+                        key: ValueKey('inbox-tilt-$index'),
+                        rotationX: _rotationX * weight,
+                        rotationY: -offset * 0.16,
+                        isDragging: (_pointer != null || moving) && weight > 0,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          key: _cardKeys.putIfAbsent(index, () => GlobalKey()),
+                          onTap: () => _openArtwork(_artworks[index], index),
+                          child: _fitCard(
+                            ReceivedArtworkCard(
+                              label: '受信作品 ${index + 1}',
+                              title: titles[index],
+                              isUnread: _artworks[index].readAt == null,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -511,6 +578,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     _expiryTimer?.cancel();
+    _imageCache.clear();
     if (widget.client == null) _client.close();
     _controller.dispose();
     super.dispose();
@@ -520,7 +588,9 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   void didUpdateWidget(covariant InboxScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.apiBaseUrl != widget.apiBaseUrl ||
-        oldWidget.authenticated != widget.authenticated) {
+        oldWidget.authenticated != widget.authenticated ||
+        oldWidget.userId != widget.userId) {
+      _imageCache.clear();
       _pause();
       _expiryTimer?.cancel();
       _inbox = [];
@@ -614,10 +684,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                                         context,
                                       ).textTheme.bodyLarge,
                                     )
-                                  : AspectRatio(
-                                      aspectRatio: 3 / 4,
-                                      child: _buildCarousel(titles),
-                                    ),
+                                  : _buildCarousel(titles),
                             ),
                           ),
                           // 一作品の場合は切り替え操作を表示しない。
@@ -644,18 +711,22 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                             onPressed: _page == 0
                                 ? null
                                 : () => _move(_page - 1),
-                            icon: const Icon(Icons.chevron_left),
+                            icon: const Icon(Icons.chevron_left_rounded),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Text('${_page + 1} / ${titles.length}'),
+                            child: Text(
+                              '${_page + 1} / ${titles.length}',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(color: AppColors.muted),
+                            ),
                           ),
                           IconButton.filledTonal(
                             tooltip: '次の作品',
                             onPressed: _page == titles.length - 1
                                 ? null
                                 : () => _move(_page + 1),
-                            icon: const Icon(Icons.chevron_right),
+                            icon: const Icon(Icons.chevron_right_rounded),
                           ),
                         ],
                       ),
