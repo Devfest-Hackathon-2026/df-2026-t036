@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:illustration_exchange/screens/inbox_screen.dart';
 import 'package:illustration_exchange/screens/ideas_screen.dart';
+import 'package:illustration_exchange/widgets/received_artwork_card.dart';
 
 void main() {
   for (final size in [
@@ -106,7 +107,7 @@ void main() {
         home: Scaffold(body: InboxScreen(artworkTitles: ['作品A'])),
       ),
     );
-    final size = tester.getSize(find.byType(IdeaSlotCard));
+    final size = tester.getSize(find.byType(ReceivedArtworkCard));
     expect(size.width / size.height, closeTo(3 / 4, 0.001));
     // 一枚と複数枚で、中央のカード領域が同じ寸法になることを確認する。
     final single = tester.getSize(find.byType(PageView));

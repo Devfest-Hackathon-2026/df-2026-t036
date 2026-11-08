@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../theme/app_theme.dart';
+import '../widgets/received_artwork_card.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
@@ -461,14 +463,10 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _openArtwork(_artworks[index]),
                           child: _fitCard(
-                            IdeaSlotCard(
-                              slotNumber: index + 1,
+                            ReceivedArtworkCard(
                               label: '受信作品 ${index + 1}',
                               title: titles[index],
-                              subtitle: _artworks[index].readAt == null
-                                  ? '未読'
-                                  : '既読',
-                              icon: Icons.image_outlined,
+                              isUnread: _artworks[index].readAt == null,
                             ),
                           ),
                         ),
@@ -663,18 +661,22 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                             onPressed: _page == 0
                                 ? null
                                 : () => _move(_page - 1),
-                            icon: const Icon(Icons.chevron_left),
+                            icon: const Icon(Icons.chevron_left_rounded),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Text('${_page + 1} / ${titles.length}'),
+                            child: Text(
+                              '${_page + 1} / ${titles.length}',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(color: AppColors.muted),
+                            ),
                           ),
                           IconButton.filledTonal(
                             tooltip: '次の作品',
                             onPressed: _page == titles.length - 1
                                 ? null
                                 : () => _move(_page + 1),
-                            icon: const Icon(Icons.chevron_right),
+                            icon: const Icon(Icons.chevron_right_rounded),
                           ),
                         ],
                       ),
