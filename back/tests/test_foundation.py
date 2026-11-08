@@ -198,3 +198,42 @@ def test_openapi_publishes_error_contract(application):
     operation = application.openapi()["paths"]["/api/v1/me"]["get"]
     schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert schema["$ref"].endswith("/ErrorEnvelope")
+
+
+def test_unexpected_error_logs_location_without_sensitive_data(application, caplog):
+    """投稿と同じPOST経路の型エラーで、位置と追跡IDのみを記録する。"""
+    def fail_submission():
+        # ローカル変数やソース行にも機密値を置き、ログへの混入を検出する。
+        private_local = "private-local-value"
+        raise TypeError("private-exception-value " + private_local)
+
+    @application.post("/api/v1/test-diagnostic/{idea_id}")
+    async def submit(idea_id: str):
+        fail_submission()
+
+    caplog.set_level(logging.ERROR, logger="uvicorn.error.requests")
+    with TestClient(application) as client:
+        response = client.post(
+            "/api/v1/test-diagnostic/private-document?token=private-query",
+            headers={"Authorization": "Bearer private-token"},
+            json={"description": "private-body"},
+        )
+    assert response.status_code == 500
+    record, = [r for r in caplog.records if r.message.startswith("unhandled_failure ")]
+    assert "requestId=" + response.headers["x-request-id"] in record.message
+    assert "exceptionType=TypeError" in record.message
+    frames = json.loads(record.message.split(" frames=", 1)[1])
+    assert frames[-1]["file"] == "test_foundation.py"
+    assert frames[-1]["function"] == "fail_submission"
+    assert frames[-1]["line"] == fail_submission.__code__.co_firstlineno + 3
+    assert all(set(frame) == {"file", "function", "line"} for frame in frames)
+    assert all("/" not in frame["file"] and "\\" not in frame["file"] for frame in frames)
+    assert record.exc_info is None
+    for private in (
+        "private-document", "private-query", "private-token", "private-body",
+        "private-local-value", "private-exception-value", "private_local",
+    ):
+        assert private not in caplog.text
+        assert private not in response.text
+    assert "frames" not in response.text
+    assert response.json()["error"]["requestId"] == response.headers["x-request-id"]
