@@ -23,3 +23,7 @@ __pycache__/
 
 # IDEが生成するプロジェクトファイルは配置場所を問わず除外する。
 *.iml
+
+# Firebase CLIの公開キャッシュと認証関連の診断ログは共有しない。
+/.firebase/
+/firebase-debug*.log
