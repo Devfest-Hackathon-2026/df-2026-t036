@@ -1,0 +1,29 @@
+name: Main PR source
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Validate main PR source
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # PRのコードを取得・実行せず、保護されたベース側の定義で送信元を判定する。
+      - name: Require develop from this repository
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$HEAD_REPOSITORY" != "$EXPECTED_REPOSITORY" || "$HEAD_BRANCH" != "develop" ]]; then
+            echo "::error::mainへのPRは、このリポジトリのdevelopから作成してください。"
+            exit 1
+          fi
