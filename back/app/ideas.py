@@ -18,6 +18,7 @@ from starlette.concurrency import run_in_threadpool
 from .auth import ActiveUser, GoogleUid, active
 from .clock import UtcDatetime, utc_now
 from .errors import ApiError
+from .post_limits import consume_post
 from .firebase import database
 from .schemas import ApiModel, InputModel, Page, PageQuery
 
@@ -429,6 +430,7 @@ def _create_idea(db, uid: str, body: IdeaCreate) -> tuple[Idea, bool]:
             "deletedAt": None,
         }
         slot_map[free_slot] = {"ideaId": body.ideaId, "expiresAt": created["publishedUntil"]}
+        consume_post(transaction, user_ref, user, "idea", now)
         transaction.create(idea_ref, created)
         transaction.update(slots_ref, {"slots": slot_map})
         transaction.update(user_ref, {"ideaCount": int(user.get("ideaCount", 0)) + 1})

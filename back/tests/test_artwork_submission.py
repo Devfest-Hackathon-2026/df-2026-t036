@@ -304,3 +304,25 @@ def test_orphan_sweep_preserves_committed_and_processing_images(environment):
     assert db.docs['cleanupState/artworkObjects']['pageToken'] == 'next-page'
     service.recover_untracked_objects(db, settings, client)
     assert client.list_blobs.call_args.kwargs['page_token'] == 'next-page'
+
+
+def test_post_limit_prevents_expensive_processing(environment):
+    # 上限到達時は画像処理やStorageを呼ばず、予約も作らない。
+    db, settings, raw, client, blob = environment
+    db.docs['users/artist']['postAttempts_artwork'] = [NOW] * 20
+    with pytest.raises(ApiError) as error:
+        service.submit(db, settings, 'artist', IDEA, raw)
+    assert error.value.status == 429
+    client.bucket.assert_not_called()
+    assert not any(path.startswith('artworkSubmissions/') for path in db.docs)
+
+
+def test_replay_at_limit_does_not_consume_slot(environment):
+    # 確定済み再送は制限を超えていても結果だけ返す。
+    db, settings, raw, client, blob = environment
+    result, _ = service.submit(db, settings, 'artist', IDEA, raw)
+    assert len(db.docs['users/artist']['postAttempts_artwork']) == 1
+    db.docs['users/artist']['postAttempts_artwork'] = [NOW] * 20
+    assert service.submit(db, settings, 'artist', IDEA, raw) == (result, False)
+    assert len(db.docs['users/artist']['postAttempts_artwork']) == 20
+    blob.upload_from_string.assert_called_once()

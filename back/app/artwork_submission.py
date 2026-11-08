@@ -18,6 +18,7 @@ from .auth import ActiveUser, active
 from .cleanup import cleanup_identity
 from .clock import utc_now
 from .errors import ApiError
+from .post_limits import consume_post
 from .firebase import database
 from .ideas import _parse_idea_id, _submission_id
 from .image_processing import ImageProcessingError, normalize_image
@@ -79,7 +80,11 @@ def reserve(db, uid, idea_id, digest, bucket_name):
         if data.get('status') == 'processing' and data['expiresAt'] > utc_now():
             raise ApiError(409, 'SUBMISSION_BUSY', '送信処理中です。時間をおいて再試行してください。')
         check_eligibility(db, tx, uid, idea_id, user, idea, history)
-        expires = utc_now() + LEASE
+        # 全読取後に枠を予約し、画像処理を始める前に制限する。
+        user_data = user.get(transaction=tx).to_dict()
+        now = utc_now()
+        consume_post(tx, user, user_data, 'artwork', now)
+        expires = now + LEASE
         path = f'artworks/{sid}/{token}.webp'
         # アップロード前に回収可能な記録を残す。試行ごとに別パスを使う。
         tx.set(submission, {'status': 'processing', 'token': token, 'digest': digest, 'expiresAt': expires})
