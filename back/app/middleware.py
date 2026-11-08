@@ -3,6 +3,7 @@
 import json
 import logging
 from time import perf_counter
+from traceback import walk_tb
 import uuid
 
 from starlette.requests import Request
@@ -80,8 +81,19 @@ class RequestContextMiddleware:
             else:
                 await self.app(scope, receive, send_response)
         except Exception as exc:
-            # 本文や例外メッセージには個人情報が入り得るため、型だけを記録する。
-            logger.error("unhandled_failure requestId=%s exceptionType=%s", request_id, type(exc).__name__)
+            # ソース本文・ローカル変数・例外メッセージを含めず、発生位置だけを記録する。
+            frames = [
+                {
+                    "file": frame.f_code.co_filename.replace("\\", "/").rsplit("/", 1)[-1],
+                    "function": frame.f_code.co_name,
+                    "line": lineno,
+                }
+                for frame, lineno in walk_tb(exc.__traceback__)
+            ]
+            logger.error(
+                "unhandled_failure requestId=%s exceptionType=%s frames=%s",
+                request_id, type(exc).__name__, json.dumps(frames),
+            )
             if started:
                 raise
             response = error_response(request, 500, "INTERNAL_ERROR", "処理に失敗しました。")
