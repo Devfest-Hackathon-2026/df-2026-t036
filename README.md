@@ -1,4 +1,4 @@
-# Illustration Exchange
+# EWOCURU
 
 「描いてほしい」と「描いてみたい」をつなぐ、お絵描きマッチングサービスです。Flutter（`flont/`）とFastAPI（`back/`）を使って開発します。フロントエンドのフォルダ名は、このプロジェクトでは `flont` としています。
 
