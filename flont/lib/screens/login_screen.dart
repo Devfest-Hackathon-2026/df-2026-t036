@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'terms_screen.dart';
+import 'privacy_policy_screen.dart';
 
 /// 新規登録とログインの状態を表示する画面。
 class LoginScreen extends StatelessWidget {
@@ -141,6 +142,18 @@ class LoginScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                              // 草案の確認はログインや同意取得を開始しない。
+                              TextButton(
+                                key: const ValueKey('login-privacy-button'),
+                                onPressed: () =>
+                                    Navigator.of(context).push<void>(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const PrivacyPolicyScreen(),
+                                      ),
+                                    ),
+                                child: const Text('プライバシーポリシー v0（草案）を確認する'),
+                              ),
                               // 認証前でも、設定画面と同じ規約全文を確認できる。
                               TextButton(
                                 key: const ValueKey('login-terms-button'),
@@ -218,7 +231,7 @@ class LoginScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 24),
                         const Text(
-                          'つづけることで、利用規約と\nプライバシーポリシーに同意したものとします。',
+                          '利用前に利用規約をご確認ください。\nプライバシーポリシーはv0（草案）です。閲覧による同意の記録は行いません。',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.muted,

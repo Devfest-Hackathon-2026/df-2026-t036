@@ -30,3 +30,5 @@ flutter:
     - assets/images/
     # 公開する利用規約だけを同梱し、内部の確認メモは含めない。
     - assets/legal/terms-test.md
+    # 草案原本を同梱し、文書とアプリ表示の二重管理を避ける。
+    - ../docs/legal/privacy-policy-v0.md
