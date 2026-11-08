@@ -11,7 +11,8 @@ class RetryTermsBundle extends CachingAssetBundle {
   int attempts = 0;
 
   @override
-  Future<ByteData> load(String key) => throw UnimplementedError();
+  // ロゴとアセット一覧は実際のバンドルから読み込み、規約本文だけを差し替える。
+  Future<ByteData> load(String key) => rootBundle.load(key);
 
   @override
   Future<String> loadString(String key, {bool cache = true}) async {
@@ -25,7 +26,8 @@ class LoadedTermsBundle extends CachingAssetBundle {
   LoadedTermsBundle(this.source);
   final String source;
   @override
-  Future<ByteData> load(String key) => throw UnimplementedError();
+  // ロゴとアセット一覧は実際のバンドルから読み込み、規約本文だけを差し替える。
+  Future<ByteData> load(String key) => rootBundle.load(key);
   @override
   Future<String> loadString(String key, {bool cache = true}) async => source;
 }

@@ -47,26 +47,13 @@ class LoginScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.auto_awesome_outlined,
-                              color: _accent,
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'EWOCURU',
-                                style: TextStyle(
-                                  color: _ink,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
+                        // 提供されたロゴを縦横比を保ったまま表示する。
+                        Image.asset(
+                          'assets/images/logo.png',
+                          width: 280,
+                          height: 145,
+                          fit: BoxFit.contain,
+                          semanticLabel: 'EWOCURU',
                         ),
                         const SizedBox(height: 44),
                         // 外部画像を使わず、お題と作品の交換をカードで表現する。
