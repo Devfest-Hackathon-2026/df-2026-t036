@@ -326,3 +326,48 @@ def test_replay_at_limit_does_not_consume_slot(environment):
     assert service.submit(db, settings, 'artist', IDEA, raw) == (result, False)
     assert len(db.docs['users/artist']['postAttempts_artwork']) == 20
     blob.upload_from_string.assert_called_once()
+
+
+def test_parallel_reservations_share_one_user_limit(environment):
+    # 並行リクエストは同じユーザー文書を更新し、上限を超えて予約しない。
+    db, settings, raw, client, blob = environment
+    ids = [f"00000000-0000-4000-8000-{index:012d}" for index in range(25)]
+    for idea_id in ids:
+        db.docs[f'ideas/{idea_id}'] = deepcopy(db.docs[f'ideas/{IDEA}'])
+
+    def attempt(idea_id):
+        try:
+            service.reserve(db, 'artist', idea_id, 'digest', 'private-bucket')
+            return 201
+        except ApiError as error:
+            return error.status
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        statuses = list(executor.map(attempt, ids))
+    assert statuses.count(201) == 20
+    assert statuses.count(429) == 5
+    assert len(db.docs['users/artist']['postAttempts_artwork']) == 20
+
+
+def test_idea_limit_survives_slot_reuse_and_allows_replay(environment, monkeypatch):
+    # スロットを空けても時間内の投稿枠は復活せず、同一投稿の再送は許可する。
+    from app import ideas
+    from uuid import uuid4
+
+    db, settings, raw, client, blob = environment
+    monkeypatch.setattr(ideas, 'utc_now', lambda: NOW)
+    monkeypatch.setattr(Transaction, 'create', Transaction.set, raising=False)
+    first = None
+    for index in range(10):
+        db.docs['userSlots/artist'] = {'slots': {}}
+        body = ideas.IdeaCreate(ideaId=str(uuid4()), title='title', description='description')
+        first = first or body
+        assert ideas._create_idea(db, 'artist', body)[1]
+    db.docs['userSlots/artist'] = {'slots': {}}
+    with pytest.raises(ApiError) as error:
+        ideas._create_idea(db, 'artist', ideas.IdeaCreate(
+            ideaId=str(uuid4()), title='title', description='description'))
+    assert error.value.status == 429
+    assert db.docs['users/artist']['ideaCount'] == 10
+    assert not ideas._create_idea(db, 'artist', first)[1]
+    assert len(db.docs['users/artist']['postAttempts_idea']) == 10
