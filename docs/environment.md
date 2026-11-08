@@ -1,4 +1,4 @@
-# Illustration Exchange 環境構築手順
+# EWOCURU 環境構築手順
 
 Flutter + FastAPI の開発用ひな形です。指定に合わせてフロントエンドのディレクトリ名は `flont` としています。
 

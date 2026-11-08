@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// EOCURUの配色を一元管理し、独自描画の装飾でも同じ色を使う。
+/// EWOCURUの配色を一元管理し、独自描画の装飾でも同じ色を使う。
 abstract final class AppColors {
   static const main = Color(0xFFC7EDFF);
   // 共通アクセント二色。枠線は既存のoutlineと彩度・明度をそろえる。

@@ -2,7 +2,7 @@
     <!-- リリース版でもAPIへ接続するために必要。 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="EOCURU"
+        android:label="EWOCURU"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
