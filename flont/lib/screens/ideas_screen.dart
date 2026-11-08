@@ -256,7 +256,8 @@ class _IdeasScreenState extends State<IdeasScreen> {
       final ideas = await Future.wait(
         List.generate(_slotCount, (index) async {
           final slot = slots['slot_$index'];
-          if (slot is! Map<String, dynamic>) return null;
+          // 新しい空Mapと旧形式のnullをどちらも空き枠として表示する。
+          if (slot is! Map<String, dynamic> || slot.isEmpty) return null;
           try {
             final detail = await _client
                 .get(

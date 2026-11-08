@@ -18,7 +18,8 @@ from .users import router
 def create_app(settings: Settings | None = None) -> FastAPI:
     """テストでは設定を差し替え、本番では起動時の環境変数を固定する。"""
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Illustration Exchange API", responses=ERROR_RESPONSES)
+    # API仕様画面にも正式なサービス名を表示する。
+    app = FastAPI(title="EWOCURU API", responses=ERROR_RESPONSES)
     app.state.settings = settings
     install_error_handlers(app)
     app.add_middleware(RequestContextMiddleware, settings=settings)
