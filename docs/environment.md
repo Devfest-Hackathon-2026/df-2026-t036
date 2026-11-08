@@ -47,7 +47,7 @@ cd ./-Illustration-exchange
 
 ## 3. APIをDockerで起動（推奨）
 
-Composeは `back/.env` の設定を起動時に読み込み、イメージには同梱しません。設定変更後は `docker compose up -d --force-recreate` で反映します。Google Cloudの認証情報はenvとは別に渡す必要があり、ADCの受け渡しは [Firebase設定](back/firebase-auth.md) を参照してください。
+Composeは `back/.local.env` の設定を起動時に読み込み、イメージには同梱しません。設定変更後は `docker compose up -d --force-recreate` で反映します。Google Cloudの認証情報はenvとは別に渡す必要があり、ADCの受け渡しは [Firebase設定](back/firebase-auth.md) を参照してください。
 
 
 ```powershell
@@ -63,6 +63,19 @@ macOS/Linuxでは `curl.exe` を `curl` に読み替えてください。
 - ログ: `docker compose logs -f api`
 - 停止: `docker compose down`
 - コード変更後: `docker compose up --build -d`（自動リロードなし）
+
+### Dockerイメージのビルドだけを検証
+
+リポジトリ直下で実行します。ビルドには環境変数ファイルやGoogle Cloudの認証情報は不要です。
+
+```powershell
+# Cloud Run向けのLinuxイメージをビルドする。
+docker build --platform linux/amd64 --tag illustration-exchange-api:local ./back
+# インストールした依存関係の整合性を確認する。
+docker run --rm illustration-exchange-api:local python -m pip check
+```
+
+`back/.dockerignore` により `.local.env` や認証ファイルはビルド対象から除外します。ローカル設定を使う起動確認は、上記の `docker compose up --build -d` を実行してください。`/health` は外部サービスへ接続しないため、この確認だけではDBやStorageの接続成功は保証しません。
 
 ## 4. APIをPythonで起動（Dockerの代替）
 
