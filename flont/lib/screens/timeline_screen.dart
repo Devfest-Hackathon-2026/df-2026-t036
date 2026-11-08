@@ -340,6 +340,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
     final bookmarked = _bookmarks.contains(id);
     return IdeaCard(
       key: ValueKey(id),
+      sketchStyle: true,
+      statusLabel: idea['isOwn'] == true
+          ? '自分のアイデア'
+          : idea['hasDrawn'] == true
+          ? '描いたアイデア'
+          : null,
       onTap: () => _openDetail(idea),
       title: idea['title'] as String,
       borderColor: idea['isOwn'] == true
