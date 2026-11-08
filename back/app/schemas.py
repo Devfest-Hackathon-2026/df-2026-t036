@@ -44,3 +44,14 @@ class Page(ApiModel, Generic[Item]):
     items: list[Item]
     nextCursor: str | None
     serverTime: UtcDatetime
+
+class TimelineQuery(PageQuery):
+    """タグ文字列を完全一致で受け取り、他の一覧の検索条件とは分離する。"""
+
+    tag: str | None = Field(default=None, min_length=1, max_length=20)
+
+    @field_validator("tag", mode="before")
+    @classmethod
+    def trim_tag(cls, value):
+        # 投稿時と同じく前後の空白を除去してから長さを検証する。
+        return value.strip() if isinstance(value, str) else value
