@@ -22,10 +22,7 @@ class IllustrationExchangeApp extends StatelessWidget {
     // 共通テーマをルートで設定し、遷移先の画面にも継承する。
     return MaterialApp(
       // アプリ切替やブラウザで使用する表示名。
-<<<<<<< HEAD
-=======
       // アプリの表示名を正式なサービス名に揃える。
->>>>>>> origin/main
       title: 'EWOCURU',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
