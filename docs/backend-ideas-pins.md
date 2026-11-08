@@ -60,7 +60,7 @@
 | `GET /api/v1/ideas/{ideaId}` | 200 Idea | 掲載期間中はactiveユーザー、7〜30日はowner／現存ピン保持者／過去送信者、30日以降はowner／過去送信者のみ。削除済みは不可。 |
 | `DELETE /api/v1/ideas/{ideaId}` | 204 | ownerのみ論理削除。該当スロット解放と`ideaCount`一度だけ減算。再送も204。 |
 | `GET /api/v1/me/ideas?limit=&cursor=` | 200 Page[Idea] | 本人の`deletedAt == null`のお題を、期限状態を問わず新着順で返す。 |
-| `GET /api/v1/me/slots` | 200 Slots | 本人の5枠。期限切れ・空き枠はnullとして返す。 |
+| `GET /api/v1/me/slots` | 200 Slots | 本人の5枠。期限切れ・空き枠は空オブジェクト `{}` として返す。 |
 | `GET /api/v1/me/pins` | 200 Pins | 欠損・削除済み・30日期限切れを除いた有効ピンとIdeaを返す。 |
 | `POST /api/v1/pins/{ideaId}` | 204 | 他人のお題、7日未満、active、5件未満を確認して追加。重複はno-opで204。 |
 | `DELETE /api/v1/pins/{ideaId}` | 204 | 本人の配列から除去。すでにない／対象Idea欠損でも成功。 |
@@ -82,7 +82,7 @@
 - タグは順序を保ち、前後空白除去後の完全一致重複を一つにする。
 - 既存ideaIdが同じowner・同じ正規化入力なら既存Ideaを200で返す。別ownerなら404、入力違いまたは論理削除済みIDの再利用は409 `IDEA_ID_CONFLICT`。
 - トランザクションはusers・ideas・userSlotsを全て読み取ってから書く。userはactiveを確認する。
-- slot_0から順に、nullまたは`expiresAt <= now`の最初の枠を選ぶ。空きがなければ409 `SLOT_LIMIT_REACHED`。
+- slot_0から順に、空Map（旧形式のnullも受け付ける）または`expiresAt <= now`の最初の枠を選ぶ。空きがなければ409 `SLOT_LIMIT_REACHED`。
 - 作成ではidea文書、slot `{ideaId, expiresAt}`、users.ideaCountを原子的に更新する。
 - 競合再試行のたびに`now`を再取得し、期限を判定する。
 
@@ -101,11 +101,11 @@
 {
   "maxSlots": 5,
   "slots": {
-    "slot_0": null,
+    "slot_0": {},
     "slot_1": {"ideaId": "...", "expiresAt": "...", "title": "..."},
-    "slot_2": null,
-    "slot_3": null,
-    "slot_4": null
+    "slot_2": {},
+    "slot_3": {},
+    "slot_4": {}
   },
   "serverTime": "..."
 }

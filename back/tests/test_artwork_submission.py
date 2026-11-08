@@ -371,3 +371,40 @@ def test_idea_limit_survives_slot_reuse_and_allows_replay(environment, monkeypat
     assert db.docs['users/artist']['ideaCount'] == 10
     assert not ideas._create_idea(db, 'artist', first)[1]
     assert len(db.docs['users/artist']['postAttempts_idea']) == 10
+
+
+def test_empty_slot_maps_create_delete_and_reuse(environment, monkeypatch):
+    # 登録直後と同じ空Mapから作成し、削除後に古い項目を残さず再利用する。
+    from app import ideas
+    from uuid import uuid4
+    db, *_ = environment
+    monkeypatch.setattr(ideas, 'utc_now', lambda: NOW)
+    monkeypatch.setattr(Transaction, 'create', Transaction.set, raising=False)
+    db.docs['userSlots/artist'] = {'slots': {f'slot_{i}': {} for i in range(5)}}
+    first = ideas.IdeaCreate(ideaId=str(uuid4()), title='first', description='description')
+    ideas._create_idea(db, 'artist', first)
+    assert ideas._get_slots(db, 'artist').model_dump()['slots']['slot_0']['ideaId'] == first.ideaId
+    ideas._delete_idea(db, 'artist', first.ideaId)
+    assert db.docs['userSlots/artist']['slots']['slot_0'] == {}
+    assert ideas._get_slots(db, 'artist').model_dump()['slots'] == {f'slot_{i}': {} for i in range(5)}
+    second = ideas.IdeaCreate(ideaId=str(uuid4()), title='second', description='description')
+    ideas._create_idea(db, 'artist', second)
+    assert db.docs['userSlots/artist']['slots']['slot_0']['ideaId'] == second.ideaId
+    ideas._delete_idea(db, 'artist', first.ideaId)
+    assert db.docs['userSlots/artist']['slots']['slot_0']['ideaId'] == second.ideaId
+
+
+def test_slot_response_normalizes_legacy_expired_and_missing(environment, monkeypatch):
+    # 旧null・空Map・期限切れ・参照欠損・削除済みは同じ空オブジェクトで返す。
+    from app import ideas
+    db, *_ = environment
+    monkeypatch.setattr(ideas, 'utc_now', lambda: NOW)
+    db.docs[f'ideas/{IDEA}']['deletedAt'] = NOW
+    db.docs['userSlots/artist'] = {'slots': {
+        'slot_0': None,
+        'slot_1': {},
+        'slot_2': {'ideaId': IDEA, 'expiresAt': NOW},
+        'slot_3': {'ideaId': 'missing', 'expiresAt': NOW + timedelta(days=1)},
+        'slot_4': {'ideaId': IDEA, 'expiresAt': NOW + timedelta(days=1)},
+    }}
+    assert ideas._get_slots(db, 'artist').model_dump()['slots'] == {f'slot_{i}': {} for i in range(5)}

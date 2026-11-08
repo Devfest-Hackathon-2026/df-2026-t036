@@ -87,7 +87,7 @@ B案を維持し、Firestore直下6種類とusers配下の履歴1種類で構成
 
 ### 2.2 userSlots/{uid}
 
-`maxSlots: integer = 5`、`slots: map`。slot_0～slot_4はnullまたは `{ ideaId: string, expiresAt: timestamp }`。expiresAtはお題のpublishedUntilと一致する。期限切れはDB整理を待たず空き扱い。古いお題を削除する際は、枠内のideaIdが一致する場合だけ解放する。
+`maxSlots: integer = 5`、`slots: map`。slot_0～slot_4は空Map `{}` または `{ ideaId: string, expiresAt: timestamp }`。expiresAtはお題のpublishedUntilと一致する。期限切れはDB整理を待たず空き扱い。古いお題を削除する際は、枠内のideaIdが一致する場合だけ解放する。
 
 ### 2.3 userPins/{uid}
 

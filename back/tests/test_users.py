@@ -52,7 +52,7 @@ def test_register_and_retry_preserves_all_documents(store):
         assert first.status_code == 201
         assert set(documents) == {"users/google-user", "userSlots/google-user", "userPins/google-user"}
         assert documents["userSlots/google-user"] == {
-            "maxSlots": 5, "slots": {f"slot_{i}": None for i in range(5)},
+            "maxSlots": 5, "slots": {f"slot_{i}": {} for i in range(5)},
         }
         assert documents["userPins/google-user"] == {"maxPins": 5, "pinnedIdeaIds": []}
         documents["users/google-user"]["drawnCount"] = 7

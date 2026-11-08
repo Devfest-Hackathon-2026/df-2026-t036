@@ -52,8 +52,9 @@ def register_user(db, uid: str) -> tuple[Me, bool]:
             "likesReceived": 0, "createdAt": firestore.SERVER_TIMESTAMP,
         }
         transaction.create(user_ref, data)
+        # 空き枠もMapに統一し、削除後と初期登録時の型を揃える。
         transaction.create(slots_ref, {
-            "maxSlots": 5, "slots": {f"slot_{index}": None for index in range(5)},
+            "maxSlots": 5, "slots": {f"slot_{index}": {} for index in range(5)},
         })
         transaction.create(pins_ref, {"maxPins": 5, "pinnedIdeaIds": []})
         return me_dto(uid, data), True
