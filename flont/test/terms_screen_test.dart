@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:illustration_exchange/screens/settings_screen.dart';
 import 'package:illustration_exchange/screens/terms_screen.dart';
+import 'package:illustration_exchange/screens/privacy_policy_screen.dart';
 import 'package:illustration_exchange/screens/login_screen.dart';
 
 // 一度だけ読み込みに失敗するアセットで、再試行の導線を確認する。
@@ -30,6 +31,51 @@ class LoadedTermsBundle extends CachingAssetBundle {
 }
 
 void main() {
+  for (final fromLogin in [true, false]) {
+    testWidgets('${fromLogin ? 'ログイン前' : '設定'}から草案全文を開いて戻る', (tester) async {
+      // 同梱された原本と導線を確認し、閲覧で認証処理が始まらないことを保証する。
+      final source = await tester.runAsync(
+        () => rootBundle.loadString('../docs/legal/privacy-policy-v0.md'),
+      );
+      expect(source, contains('## 10．改定'));
+      var signInCount = 0;
+      await tester.pumpWidget(
+        DefaultAssetBundle(
+          bundle: LoadedTermsBundle(source!),
+          child: MaterialApp(
+            home: fromLogin
+                ? LoginScreen(onSignIn: () => signInCount++)
+                : const SettingsScreen(
+                    nickname: 'テスト',
+                    googleEmail: 'test@example.test',
+                  ),
+          ),
+        ),
+      );
+      final link = fromLogin
+          ? find.byKey(const ValueKey('login-privacy-button'))
+          : find.text('プライバシーポリシー');
+      await tester.ensureVisible(link);
+      await tester.pumpAndSettle();
+      await tester.tap(link);
+      await tester.pumpAndSettle();
+      expect(find.byType(PrivacyPolicyScreen), findsOneWidget);
+      final text = tester
+          .widget<SelectableText>(find.byType(SelectableText))
+          .textSpan!
+          .toPlainText();
+      expect(text, contains('v0（草案）'));
+      expect(text, contains('10．改定'));
+      expect(signInCount, 0);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(fromLogin ? LoginScreen : SettingsScreen),
+        findsOneWidget,
+      );
+    });
+  }
+
   // 規約の閲覧で認証処理を呼ばず、ログイン画面へ戻れることを確認する。
   testWidgets('ログイン前に規約を開いて戻る', (tester) async {
     var signInCount = 0;

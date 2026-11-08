@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'terms_screen.dart';
+import 'privacy_policy_screen.dart';
 import 'vision_demo_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, this.nickname, this.googleEmail, this.apiBaseUrl = 'http://localhost:8080'});
+  const SettingsScreen({
+    super.key,
+    this.nickname,
+    this.googleEmail,
+    this.apiBaseUrl = 'http://localhost:8080',
+  });
 
   final String? nickname;
   final String? googleEmail;
@@ -113,6 +119,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
             title: const Text('プライバシーポリシー'),
+            subtitle: const Text('v0（草案）'),
+            trailing: const Icon(Icons.chevron_right),
+            // 設定からログイン前と同じ草案を参照する。
+            onTap: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.mail_outline),

@@ -4,7 +4,15 @@ import '../theme/page_layout.dart';
 
 /// 同梱した規約本文を表示する。閲覧しただけでは同意済みとして扱わない。
 class TermsScreen extends StatefulWidget {
-  const TermsScreen({super.key});
+  const TermsScreen({
+    super.key,
+    this.title = '利用規約',
+    this.assetPath = 'assets/legal/terms-test.md',
+  });
+
+  // 同じ表示・再試行処理で、指定した法務文書を全文表示する。
+  final String title;
+  final String assetPath;
 
   @override
   State<TermsScreen> createState() => _TermsScreenState();
@@ -20,14 +28,14 @@ class _TermsScreenState extends State<TermsScreen> {
   }
 
   Future<String> _loadTerms() =>
-      DefaultAssetBundle.of(context).loadString('assets/legal/terms-test.md');
+      DefaultAssetBundle.of(context).loadString(widget.assetPath);
 
   @override
   Widget build(BuildContext context) {
     final layout = PageLayout.of(context);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('利用規約')),
+      appBar: AppBar(title: Text(widget.title)),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -41,7 +49,7 @@ class _TermsScreenState extends State<TermsScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('利用規約を読み込めませんでした。'),
+                        Text('${widget.title}を読み込めませんでした。'),
                         TextButton(
                           onPressed: () {
                             final retry = _loadTerms();
