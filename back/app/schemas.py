@@ -45,7 +45,6 @@ class Page(ApiModel, Generic[Item]):
     nextCursor: str | None
     serverTime: UtcDatetime
 
-
 class TimelineQuery(PageQuery):
     """タグ文字列を完全一致で受け取り、他の一覧の検索条件とは分離する。"""
 
