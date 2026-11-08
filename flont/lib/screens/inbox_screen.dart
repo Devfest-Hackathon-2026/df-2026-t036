@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../theme/app_theme.dart';
+import '../widgets/received_artwork_card.dart';
+import '../widgets/artwork_opening_route.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
@@ -310,11 +313,27 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openArtwork(ReceivedArtwork artwork) async {
+  final _cardKeys = <int, GlobalKey>{};
+
+  Future<void> _openArtwork(ReceivedArtwork artwork, int index) async {
+    if (_detailOpen) return;
+    final cardBox = _cardKeys[index]?.currentContext?.findRenderObject();
+    final navigatorBox = Navigator.of(
+      context,
+    ).overlay?.context.findRenderObject();
+    if (cardBox is! RenderBox || navigatorBox is! RenderBox) return;
+    final sourceRect =
+        navigatorBox.globalToLocal(cardBox.localToGlobal(Offset.zero)) &
+        cardBox.size;
     _detailOpen = true;
     _pause();
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+      ArtworkOpeningRoute(
+        sourceRect: sourceRect,
+        title: artwork.title,
+        label: '受信作品 ${index + 1}',
+        isUnread: artwork.readAt == null,
+        reduceMotion: MediaQuery.disableAnimationsOf(context),
         builder: (_) => ArtworkDetailScreen(
           artwork: artwork,
           now: () => _now,
@@ -349,7 +368,8 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     if (_canFetch) _loadInbox();
   }
 
-  final _controller = PageController();
+  static const _viewportFraction = 0.72;
+  var _controller = PageController(viewportFraction: _viewportFraction);
   int _page = 0;
   final _gestureKey = GlobalKey();
   int? _pointer;
@@ -391,7 +411,25 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     },
   );
 
-  Widget _buildCarousel(List<String> titles) {
+  Widget _buildCarousel(List<String> titles) => LayoutBuilder(
+    builder: (context, space) {
+      final fraction = (space.maxHeight * 3 / 4 / space.maxWidth).clamp(
+        0.01,
+        _viewportFraction,
+      );
+      if ((_controller.viewportFraction - fraction).abs() > 0.0001) {
+        final previous = _controller;
+        _controller = PageController(
+          initialPage: _page,
+          viewportFraction: fraction,
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+      }
+      return _buildCarouselPages(titles);
+    },
+  );
+
+  Widget _buildCarouselPages(List<String> titles) {
     return Listener(
       key: _gestureKey,
       onPointerDown: (event) {
@@ -419,6 +457,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
               },
             ),
             child: PageView.builder(
+              key: ObjectKey(_controller),
               clipBehavior: Clip.none,
               controller: _controller,
               physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
@@ -427,28 +466,27 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
               itemBuilder: (context, index) {
                 final weight = (1.0 - (page - index).abs()).clamp(0.0, 1.0);
                 final offset = (page - index).clamp(-1.0, 1.0);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 0,
-                    vertical: 0,
-                  ),
-                  child: TiltCard(
-                    key: ValueKey('inbox-tilt-$index'),
-                    rotationX: _rotationX * weight,
-                    rotationY: -offset * 0.16,
-                    isDragging: (_pointer != null || moving) && weight > 0,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _openArtwork(_artworks[index]),
-                      child: _fitCard(
-                        IdeaSlotCard(
-                          slotNumber: index + 1,
-                          label: '受信作品 ${index + 1}',
-                          title: titles[index],
-                          subtitle: _artworks[index].readAt == null
-                              ? '未読'
-                              : '既読',
-                          icon: Icons.image_outlined,
+                return Center(
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: Padding(
+                      padding: EdgeInsets.zero,
+                      child: TiltCard(
+                        key: ValueKey('inbox-tilt-$index'),
+                        rotationX: _rotationX * weight,
+                        rotationY: -offset * 0.16,
+                        isDragging: (_pointer != null || moving) && weight > 0,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          key: _cardKeys.putIfAbsent(index, () => GlobalKey()),
+                          onTap: () => _openArtwork(_artworks[index], index),
+                          child: _fitCard(
+                            ReceivedArtworkCard(
+                              label: '受信作品 ${index + 1}',
+                              title: titles[index],
+                              isUnread: _artworks[index].readAt == null,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -614,10 +652,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                                         context,
                                       ).textTheme.bodyLarge,
                                     )
-                                  : AspectRatio(
-                                      aspectRatio: 3 / 4,
-                                      child: _buildCarousel(titles),
-                                    ),
+                                  : _buildCarousel(titles),
                             ),
                           ),
                           // 一作品の場合は切り替え操作を表示しない。
@@ -644,18 +679,22 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                             onPressed: _page == 0
                                 ? null
                                 : () => _move(_page - 1),
-                            icon: const Icon(Icons.chevron_left),
+                            icon: const Icon(Icons.chevron_left_rounded),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Text('${_page + 1} / ${titles.length}'),
+                            child: Text(
+                              '${_page + 1} / ${titles.length}',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(color: AppColors.muted),
+                            ),
                           ),
                           IconButton.filledTonal(
                             tooltip: '次の作品',
                             onPressed: _page == titles.length - 1
                                 ? null
                                 : () => _move(_page + 1),
-                            icon: const Icon(Icons.chevron_right),
+                            icon: const Icon(Icons.chevron_right_rounded),
                           ),
                         ],
                       ),
