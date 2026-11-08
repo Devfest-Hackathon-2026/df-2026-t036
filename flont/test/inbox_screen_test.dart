@@ -27,10 +27,78 @@ void main() {
       final next = tester.getRect(find.byTooltip('次の作品'));
       expect(card.bottom, lessThanOrEqualTo(next.top));
       expect(next.bottom, lessThanOrEqualTo(size.height - 80));
-      expect(card.width / card.height, closeTo(3 / 4, 0.001));
+      final first = tester.getRect(find.byKey(const ValueKey('inbox-tilt-0')));
+      final second = tester.getRect(find.byKey(const ValueKey('inbox-tilt-1')));
+      expect(first.width / first.height, closeTo(3 / 4, 0.001));
+      expect(second.left, lessThan(card.right));
+      expect(second.right, greaterThan(card.left));
       expect(tester.takeException(), isNull);
     });
   }
+  testWidgets('desktop shows both neighbors on the middle page', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: InboxScreen(artworkTitles: ['A', 'B', 'C'])),
+      ),
+    );
+    final pager = tester.widget<PageView>(find.byType(PageView));
+    pager.controller!.jumpToPage(1);
+    await tester.pumpAndSettle();
+    final viewport = tester.getRect(find.byType(PageView));
+    for (final index in [0, 2]) {
+      final neighbor = tester.getRect(
+        find.byKey(ValueKey('inbox-tilt-$index')),
+      );
+      expect(neighbor.overlaps(viewport), isTrue);
+    }
+    final current = tester.getRect(find.byKey(const ValueKey('inbox-tilt-1')));
+    expect(current.center.dx, closeTo(viewport.center.dx, 0.001));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('desktop drags from the far edge and survives resizing', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: InboxScreen(artworkTitles: ['A', 'B', 'C', 'D', 'E']),
+        ),
+      ),
+    );
+    final viewport = tester.getRect(find.byType(PageView));
+    final gesture = await tester.startGesture(
+      Offset(viewport.right - 8, viewport.center.dy),
+    );
+    await gesture.moveBy(const Offset(-30, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-240, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<PageView>(find.byType(PageView)).controller!.page,
+      greaterThan(0),
+    );
+    tester.widget<PageView>(find.byType(PageView)).controller!.jumpToPage(4);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<PageView>(find.byType(PageView)).controller!.page,
+      closeTo(4, 0.001),
+    );
+    expect(tester.takeException(), isNull);
+  });
   // 受信カードの輪郭が幅にかかわらず横3・縦4になることを確認する。
   testWidgets('受信カードは3対4で表示される', (tester) async {
     await tester.pumpWidget(
