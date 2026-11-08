@@ -13,6 +13,7 @@ class ArtworkDetailScreen extends StatefulWidget {
     super.key,
     required this.artwork,
     this.imageLoader,
+    this.onImageInvalid,
     this.onMarkRead,
     this.now,
     this.onLike,
@@ -23,6 +24,8 @@ class ArtworkDetailScreen extends StatefulWidget {
 
   final ReceivedArtwork artwork;
   final Future<Uint8List> Function()? imageLoader;
+  // Let the caller evict bytes that fail decoding so retry can refetch them.
+  final VoidCallback? onImageInvalid;
   final Future<DateTime> Function()? onMarkRead;
   final DateTime Function()? now;
   final Future<void> Function()? onLike;
@@ -302,7 +305,10 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
               ? const Center(child: CircularProgressIndicator())
               : child;
         },
-        errorBuilder: (context, error, stackTrace) => _imageFailure(),
+        errorBuilder: (context, error, stackTrace) {
+          widget.onImageInvalid?.call();
+          return _imageFailure();
+        },
       );
     }
     return Center(

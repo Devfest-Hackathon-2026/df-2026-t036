@@ -37,17 +37,19 @@ http.Response page(String title, {String? cursor}) => http.Response(
   headers: {'content-type': 'application/json; charset=utf-8'},
 );
 
-Widget screen(http.Client client, {bool active = true}) => MaterialApp(
-  home: Scaffold(
-    body: InboxScreen(
-      authenticated: true,
-      active: active,
-      apiBaseUrl: 'https://api.example.test/',
-      client: client,
-      idTokenProvider: () async => 'test-token',
-    ),
-  ),
-);
+Widget screen(http.Client client, {bool active = true, String? userId}) =>
+    MaterialApp(
+      home: Scaffold(
+        body: InboxScreen(
+          authenticated: true,
+          userId: userId,
+          active: active,
+          apiBaseUrl: 'https://api.example.test/',
+          client: client,
+          idTokenProvider: () async => 'test-token',
+        ),
+      ),
+    );
 
 void main() {
   group('inbox API', () {
@@ -100,6 +102,184 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(find.byType(ArtworkDetailScreen), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      client.close();
+    });
+
+    testWidgets('reopening reuses image, account change and disposal refetch', (
+      tester,
+    ) async {
+      var images = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/image')) {
+          images++;
+          return http.Response.bytes(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwLd3wHwAElwJa3P4zawAAAABJRU5ErkJggg==',
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/read')) {
+          return http.Response(
+            jsonEncode({
+              'submissionId': 'Received idea',
+              'readAt': DateTime.now().toUtc().toIso8601String(),
+            }),
+            200,
+          );
+        }
+        return page('Received idea');
+      });
+      Future<void> open() async {
+        await tester.tap(find.text('Received idea'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 150)),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(Image), findsOneWidget);
+      }
+
+      Future<void> back() async {
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(screen(client, userId: 'one'));
+      await tester.pumpAndSettle();
+      await open();
+      await back();
+      await open();
+      expect(images, 1);
+      await back();
+      await tester.pumpWidget(screen(client, userId: 'two'));
+      await tester.pumpAndSettle();
+      await open();
+      expect(images, 2);
+      await back();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(screen(client, userId: 'two'));
+      await tester.pumpAndSettle();
+      await open();
+      expect(images, 3);
+      await back();
+      await tester.pumpWidget(const SizedBox());
+      client.close();
+    });
+
+    testWidgets('successful refresh removes images no longer in the inbox', (
+      tester,
+    ) async {
+      var removed = false;
+      var images = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/image')) {
+          images++;
+          return http.Response.bytes(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwLd3wHwAElwJa3P4zawAAAABJRU5ErkJggg==',
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/read')) {
+          return http.Response(
+            jsonEncode({
+              'submissionId': 'Received idea',
+              'readAt': DateTime.now().toUtc().toIso8601String(),
+            }),
+            200,
+          );
+        }
+        if (removed) {
+          return http.Response(
+            jsonEncode({
+              'items': [],
+              'nextCursor': null,
+              'serverTime': DateTime.now().toUtc().toIso8601String(),
+            }),
+            200,
+          );
+        }
+        return page('Received idea');
+      });
+      Future<void> open() async {
+        await tester.tap(find.text('Received idea'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 150)),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(screen(client));
+      await tester.pumpAndSettle();
+      await open();
+      removed = true;
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Received idea'), findsNothing);
+      removed = false;
+      await tester.pumpWidget(screen(client, active: false));
+      await tester.pumpWidget(screen(client));
+      await tester.pumpAndSettle();
+      await open();
+      expect(images, 2);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      client.close();
+    });
+
+    testWidgets('invalid cached image is discarded and retry refetches', (
+      tester,
+    ) async {
+      var images = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/image')) {
+          images++;
+          return http.Response.bytes(
+            images == 1
+                ? [1, 2, 3]
+                : base64Decode(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwLd3wHwAElwJa3P4zawAAAABJRU5ErkJggg==',
+                  ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/read')) {
+          return http.Response(
+            jsonEncode({
+              'submissionId': 'Received idea',
+              'readAt': DateTime.now().toUtc().toIso8601String(),
+            }),
+            200,
+          );
+        }
+        return page('Received idea');
+      });
+      await tester.pumpWidget(screen(client));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Received idea'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('画像を再試行'));
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+      );
+      await tester.pumpAndSettle();
+      expect(images, 2);
+      expect(find.text('画像を再試行'), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
       client.close();
     });
