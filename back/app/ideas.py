@@ -20,7 +20,7 @@ from .clock import UtcDatetime, utc_now
 from .errors import ApiError
 from .post_limits import consume_post
 from .firebase import database
-from .schemas import ApiModel, InputModel, Page, PageQuery
+from .schemas import ApiModel, InputModel, Page, PageQuery, TimelineQuery
 
 
 router = APIRouter(prefix="/api/v1")
@@ -73,7 +73,8 @@ class Idea(ApiModel):
 
 
 class IdeaPage(Page[Idea]):
-    pass
+    # 表示ページや選択条件に依存しない、掲載中のお題全体のタグ候補。
+    tags: list[str] = Field(default_factory=list)
 
 
 class SlotIdea(ApiModel):
@@ -313,6 +314,10 @@ def _list_ideas(db, *, uid: str, query: PageQuery, own: bool) -> IdeaPage:
     now = utc_now()
     scope = "own-ideas" if own else "timeline"
     collection = db.collection("ideas")
+    tag = query.tag if isinstance(query, TimelineQuery) and not own else None
+    if tag is not None:
+        # カーソルを選択タグへ結び付け、別の検索条件での再利用を拒否する。
+        scope += ":tag:" + tag
     if own:
         firestore_query = (
             collection.where(filter=FieldFilter("ownerId", "==", uid))
@@ -327,6 +332,16 @@ def _list_ideas(db, *, uid: str, query: PageQuery, own: bool) -> IdeaPage:
             .order_by("publishedUntil", direction=firestore.Query.DESCENDING)
             .order_by("__name__", direction=firestore.Query.DESCENDING)
         )
+    tags = []
+    if not own:
+        # 全ページの候補を維持し、絞り込み後も別のタグへ切り替えられる。
+        tags = sorted({
+            value for snapshot in firestore_query.select(["tags"]).stream()
+            for value in snapshot.to_dict().get("tags", [])
+            if isinstance(value, str) and value
+        })
+    if tag is not None:
+        firestore_query = firestore_query.where(filter=FieldFilter("tags", "array_contains", tag))
     cursor_snapshot = _cursor_snapshot(db, query.cursor, scope, uid)
     if cursor_snapshot is not None:
         firestore_query = firestore_query.start_after(cursor_snapshot)
@@ -339,7 +354,7 @@ def _list_ideas(db, *, uid: str, query: PageQuery, own: bool) -> IdeaPage:
         if has_more and page_documents
         else None
     )
-    return IdeaPage(items=items, nextCursor=next_cursor, serverTime=now)
+    return IdeaPage(items=items, nextCursor=next_cursor, serverTime=now, tags=tags)
 
 
 def _get_idea(db, uid: str, idea_id: str) -> Idea:
@@ -618,7 +633,7 @@ def _get_pins(db, uid: str) -> Pins:
 
 @router.get("/ideas", response_model=IdeaPage)
 async def list_timeline(
-    query: Annotated[PageQuery, Query()],
+    query: Annotated[TimelineQuery, Query()],
     user: ActiveUser,
 ):
     """Return current public timeline ideas in stable cursor order."""
