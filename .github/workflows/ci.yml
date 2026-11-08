@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.11'
           cache: pip
@@ -39,7 +39,7 @@ jobs:
       run:
         working-directory: flont
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.9'
@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - run: docker build --platform linux/amd64 -t illustration-exchange-api:${{ github.sha }} ./back
       - run: docker run --rm illustration-exchange-api:${{ github.sha }} python -m pip check
       - name: Verify startup and image isolation
@@ -105,7 +105,7 @@ jobs:
       WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       DEPLOY_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Validate deployment configuration
         shell: bash
         run: |
