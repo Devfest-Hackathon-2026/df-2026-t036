@@ -55,7 +55,17 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('EWOCURU'), centerTitle: true),
+      appBar: AppBar(
+        // ヘッダーの高さに収め、読み上げ用のサービス名も保持する。
+        title: Image.asset(
+          'assets/images/logo.png',
+          width: 120,
+          height: 52,
+          fit: BoxFit.contain,
+          semanticLabel: 'EWOCURU',
+        ),
+        centerTitle: true,
+      ),
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: DecoratedBox(
         position: DecorationPosition.foreground,
