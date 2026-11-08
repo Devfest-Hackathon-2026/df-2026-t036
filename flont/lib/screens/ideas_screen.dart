@@ -451,43 +451,68 @@ class _IdeasScreenState extends State<IdeasScreen> {
         child: ListView(
           padding: layout.insets,
           children: [
-            // 二つのアイコンを一つのカプセルにまとめ、選択側を背景色で示す。
+            Text(
+              _showBookmarks ? '保存したアイデア' : 'アイデアノート',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _showBookmarks
+                  ? 'タイムラインのしおりから、5件まで保存できます。'
+                  : '空き枠から、新しいアイデアを投稿できます。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 20),
             Align(
-              alignment: Alignment.centerRight,
-              child: SegmentedButton<bool>(
-                style: ButtonStyle(
-                  shape: WidgetStateProperty.all(const StadiumBorder()),
-                  minimumSize: WidgetStateProperty.all(const Size(56, 48)),
-                  backgroundColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.selected)
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.surface,
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 360,
+                child: SegmentedButton<bool>(
+                  expandedInsets: EdgeInsets.zero,
+                  style: ButtonStyle(
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    minimumSize: WidgetStateProperty.all(const Size(56, 48)),
+                    padding: WidgetStateProperty.all(
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    ),
+                    iconSize: WidgetStateProperty.all(20),
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.selected)
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context).colorScheme.surface,
+                    ),
                   ),
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      tooltip: '自分のアイデア',
+                      label: const Text('自分の投稿', maxLines: 1, softWrap: false),
+                      icon: Icon(
+                        _showBookmarks
+                            ? Icons.lightbulb_outline
+                            : Icons.lightbulb,
+                      ),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      tooltip: 'ブックマーク',
+                      label: const Text('保存済み', maxLines: 1, softWrap: false),
+                      icon: Icon(
+                        _showBookmarks ? Icons.bookmark : Icons.bookmark_border,
+                      ),
+                    ),
+                  ],
+                  selected: {_showBookmarks},
+                  onSelectionChanged: (selection) {
+                    setState(() => _showBookmarks = selection.single);
+                    if (_showBookmarks) _loadBookmarks();
+                  },
                 ),
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(
-                    value: false,
-                    tooltip: '自分のアイデア',
-                    icon: Icon(
-                      _showBookmarks
-                          ? Icons.lightbulb_outline
-                          : Icons.lightbulb,
-                    ),
-                  ),
-                  ButtonSegment(
-                    value: true,
-                    tooltip: 'ブックマーク',
-                    icon: Icon(
-                      _showBookmarks ? Icons.bookmark : Icons.bookmark_border,
-                    ),
-                  ),
-                ],
-                selected: {_showBookmarks},
-                onSelectionChanged: (selection) {
-                  setState(() => _showBookmarks = selection.single);
-                  if (_showBookmarks) _loadBookmarks();
-                },
               ),
             ),
             const SizedBox(height: 16),
@@ -527,6 +552,8 @@ class _IdeasScreenState extends State<IdeasScreen> {
       final idea = _bookmarks[index];
       return IdeaCard(
         key: ValueKey('bookmark-slot-${index + 1}'),
+        sketchStyle: true,
+        statusLabel: idea['hasDrawn'] == true ? '描いたアイデア' : '保存済み',
         title: idea['title'] as String,
         // 他の人のお題は閲覧用詳細を開き、削除操作を渡さない。
         onTap: () => Navigator.of(context).push<void>(
@@ -556,14 +583,10 @@ class _IdeasScreenState extends State<IdeasScreen> {
             : () => _removeBookmark(idea['ideaId'] as String),
       );
     }
-    // 未保存のスロットはマークを置かず、空のカードだけを表示する。
-    return Card(
+    return _EmptyIdeaSlot(
       key: ValueKey('bookmark-slot-${index + 1}'),
-      margin: EdgeInsets.zero,
-      child: Semantics(
-        label: 'ブックマークの空き枠 ${index + 1}',
-        child: const SizedBox(height: 112),
-      ),
+      index: index,
+      bookmark: true,
     );
   }
 
@@ -572,6 +595,11 @@ class _IdeasScreenState extends State<IdeasScreen> {
     if (_slotErrors[index] != null) {
       return Card(
         key: ValueKey('idea-slot-${index + 1}'),
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.outline),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -591,6 +619,8 @@ class _IdeasScreenState extends State<IdeasScreen> {
     if (idea != null) {
       return IdeaCard(
         key: ValueKey('idea-slot-${index + 1}'),
+        sketchStyle: true,
+        statusLabel: '掲載中',
         title: idea.title,
         backgroundColor: AppColors.ownIdea,
         borderColor: AppColors.accentGreen,
@@ -601,25 +631,89 @@ class _IdeasScreenState extends State<IdeasScreen> {
         onTap: () => _openDetail(idea, index),
       );
     }
-    // 空き枠は中央の丸付きプラスだけにし、読み上げ用の説明を添える。
-    return Card(
+    return _EmptyIdeaSlot(
       key: ValueKey('idea-slot-${index + 1}'),
-      margin: EdgeInsets.zero,
+      index: index,
+      bookmark: false,
+      onTap: _isLoading || _loadError != null
+          ? null
+          : () => _openComposer(index),
+    );
+  }
+}
+
+/// Empty paper slots distinguish creating a post from saving someone else's idea.
+class _EmptyIdeaSlot extends StatelessWidget {
+  const _EmptyIdeaSlot({
+    super.key,
+    required this.index,
+    required this.bookmark,
+    this.onTap,
+  });
+  final int index;
+  final bool bookmark;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.outline),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Semantics(
-        label: '枠 ${index + 1}にアイデアを投稿',
-        button: true,
+        label: bookmark ? 'ブックマークの空き枠 ${index + 1}' : '枠 ${index + 1}にアイデアを投稿',
+        button: !bookmark,
+        enabled: bookmark ? null : onTap != null,
         child: InkWell(
-          onTap: _isLoading || _loadError != null
-              ? null
-              : () => _openComposer(index),
-          child: SizedBox(
-            height: 112,
-            child: Center(
-              child: Icon(
-                Icons.add_circle_outline,
-                size: 40,
-                color: Theme.of(context).colorScheme.primary,
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 112),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: bookmark
+                          ? AppColors.background
+                          : Color.lerp(AppColors.surface, AppColors.main, 0.40),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      bookmark
+                          ? Icons.bookmark_border_rounded
+                          : Icons.add_circle_outline,
+                      size: bookmark ? 24 : 30,
+                      color: bookmark ? AppColors.muted : AppColors.sub,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          bookmark ? '保存枠 ${index + 1}' : 'アイデアを追加',
+                          style: text.titleMedium?.copyWith(
+                            color: bookmark ? AppColors.muted : AppColors.sub,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          bookmark ? 'まだ保存されていません' : '空き枠 ${index + 1} / 5',
+                          style: text.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
