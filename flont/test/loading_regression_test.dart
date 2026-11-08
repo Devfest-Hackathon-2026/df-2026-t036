@@ -22,6 +22,44 @@ Map<String, dynamic> idea(String id) => {
 };
 
 void main() {
+  testWidgets('空Mapと旧nullは詳細取得せず空き枠として表示する', (tester) async {
+    // 空MapをideaId=nullとして取得するとエラー表示になる不具合を防ぐ。
+    final requested = <String>[];
+    final client = MockClient((request) async {
+      requested.add(request.url.path);
+      if (request.url.path.endsWith('/me/slots')) {
+        return response({
+          'slots': {'slot_0': {}, 'slot_1': null},
+        });
+      }
+      return response({'items': []});
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: IdeasScreen(
+            authenticated: true,
+            client: client,
+            idTokenProvider: () async => 'token',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(requested.any((path) => path.contains('/ideas/')), isFalse);
+    for (final index in [1, 2]) {
+      expect(
+        find.descendant(
+          of: find.byKey(ValueKey('idea-slot-$index')),
+          matching: find.byIcon(Icons.add_circle_outline),
+        ),
+        findsOneWidget,
+      );
+    }
+    await tester.pumpWidget(const SizedBox());
+    client.close();
+  }, skip: const bool.fromEnvironment('DEV_PREVIEW'));
+
   testWidgets('one failed slot does not hide healthy slots or become empty', (
     tester,
   ) async {
