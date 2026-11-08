@@ -66,6 +66,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
     '海',
     '図書館',
   ];
+  List<String> _tags = [];
   String? _selectedTag;
   final _deletedPreviewIdeas = <String>{};
   List<Map<String, dynamic>> get _previewIdeas =>
@@ -99,9 +100,19 @@ class _TimelineScreenState extends State<TimelineScreen> {
   int get _previewPageCount => ((_previewIdeas.length + 9) ~/ 10).clamp(1, 3);
 
   void _selectTag(String? tag) {
-    if (_selectedTag == tag) return;
-    _selectedTag = tag;
-    _loadPage(0);
+    if (_selectedTag == tag || _saving) return;
+    // 古い通信を無効化し、タグごとのカーソルを先頭から取り直す。
+    setState(() {
+      _selectedTag = tag;
+      _loadGeneration++;
+      _loading = false;
+      _ideas = [];
+      _page = 0;
+      _nextCursor = null;
+      _cursors.clear();
+      _cursors.add(null);
+    });
+    _loadPage(0, refresh: true);
   }
 
   late final http.Client _client = widget.client ?? http.Client();
@@ -140,6 +151,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
       _cursors.clear();
       _cursors.add(null);
       _ideas = [];
+      _tags = [];
+      _selectedTag = null;
       _bookmarks = {};
       _page = 0;
       _nextCursor = null;
@@ -214,7 +227,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
     try {
       final cursor = refresh ? null : _cursors[page];
       final query = Uri(
-        queryParameters: {'limit': '10', 'cursor': ?cursor},
+        queryParameters: {
+          'limit': '10',
+          'cursor': ?cursor,
+          'tag': ?_selectedTag,
+        },
       ).query;
       final responses = await Future.wait([
         _request('/ideas?$query'),
@@ -229,6 +246,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _ideas = (data['items'] as List).cast<Map<String, dynamic>>();
+        // サーバーから取得した全体のタグ候補を表示する。
+        _tags = (data['tags'] as List? ?? []).cast<String>();
         _bookmarks = (pins['items'] as List)
             .map((item) => item['ideaId'] as String)
             .toSet();
@@ -379,7 +398,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: Column(
           children: [
-            if (_isPreview) ...[
+            ...[
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   layout.horizontalPadding,
@@ -388,27 +407,28 @@ class _TimelineScreenState extends State<TimelineScreen> {
                   0,
                 ),
                 child: TimelineTagBar(
-                  tags: _previewTags,
+                  tags: _isPreview ? _previewTags : _tags,
                   selectedTag: _selectedTag,
                   onSelected: _selectTag,
                 ),
               ),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  layout.horizontalPadding,
-                  4,
-                  layout.horizontalPadding,
-                  0,
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_selectedTag == null ? 'すべて' : '#$_selectedTag'} / ${_previewIdeas.length}件',
-                    key: const ValueKey('timeline-tag-summary'),
-                    style: Theme.of(context).textTheme.bodySmall,
+              if (_isPreview)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    layout.horizontalPadding,
+                    4,
+                    layout.horizontalPadding,
+                    0,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${_selectedTag == null ? 'すべて' : '#$_selectedTag'} / ${_previewIdeas.length}件',
+                      key: const ValueKey('timeline-tag-summary'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 ),
-              ),
             ],
             if (_loading) const LinearProgressIndicator(),
             if (_error != null)
