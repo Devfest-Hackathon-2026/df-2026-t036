@@ -82,9 +82,13 @@ class SlotIdea(ApiModel):
     title: str | None = None
 
 
+class EmptySlot(ApiModel):
+    """空きスロットはnullではなく空のオブジェクトで返す。"""
+
+
 class Slots(ApiModel):
     maxSlots: int
-    slots: dict[str, SlotIdea | None]
+    slots: dict[str, SlotIdea | EmptySlot]
     serverTime: UtcDatetime
 
 
@@ -413,7 +417,7 @@ def _create_idea(db, uid: str, body: IdeaCreate) -> tuple[Idea, bool]:
         for index in range(MAX_SLOTS):
             slot_key = f"slot_{index}"
             slot = slot_map.get(slot_key)
-            if slot is None or slot.get("expiresAt") <= now:
+            if not slot or slot.get("expiresAt") <= now:
                 free_slot = slot_key
                 break
         if free_slot is None:
@@ -475,7 +479,8 @@ def _delete_idea(db, uid: str, idea_id: str) -> None:
             slot_map = dict(slot_data.get("slots", {}))
             for key, slot in slot_map.items():
                 if slot and slot.get("ideaId") == idea_id:
-                    slot_map[key] = None
+                    # 全Mapを更新することで、ideaId等の古い項目を残さない。
+                    slot_map[key] = {}
             transaction.update(slots_ref, {"slots": slot_map})
         transaction.update(user_ref, {"ideaCount": max(0, int(user.get("ideaCount", 0)) - 1)})
 
@@ -488,20 +493,20 @@ def _get_slots(db, uid: str) -> Slots:
     if not snapshot.exists:
         raise ApiError(503, "SERVICE_UNAVAILABLE", "掲載枠を読み込めません。")
     stored = snapshot.to_dict()
-    result: dict[str, SlotIdea | None] = {}
+    result: dict[str, SlotIdea | EmptySlot] = {}
     for index in range(MAX_SLOTS):
         key = f"slot_{index}"
         slot = stored.get("slots", {}).get(key)
         if not slot or slot.get("expiresAt") <= now:
-            result[key] = None
+            result[key] = EmptySlot()
             continue
         idea_snapshot = db.collection("ideas").document(slot["ideaId"]).get()
         if not idea_snapshot.exists:
-            result[key] = None
+            result[key] = EmptySlot()
             continue
         idea = idea_snapshot.to_dict()
         if idea.get("deletedAt") is not None:
-            result[key] = None
+            result[key] = EmptySlot()
             continue
         result[key] = SlotIdea(
             ideaId=slot["ideaId"], expiresAt=slot["expiresAt"], title=idea.get("title")
