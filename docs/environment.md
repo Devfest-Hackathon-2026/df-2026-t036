@@ -94,10 +94,10 @@ docker run --rm illustration-exchange-api:local python -m pip check
 ## デプロイ・関連資料
 
 - [CI/CDとCloud Run](ci-cd.md)
-- [Firebase Hosting](firebase-hosting.md)
-- [ブランチ運用](branch-workflow.md)
+- [Firebase Hosting](ci-cd.md)
+- [ブランチ運用](ci-cd.md)
 - [API共通基盤](back/backend-foundation.md)
-- [期限切れ作品の整理](back/artwork-expiry-cleanup.md)
+- [期限切れ作品の整理](back/cleanup.md)
 - [Flutter詳細手順](../flont/README.md)
 
 環境構築や通常の起動だけで本番へデプロイされることはありません。

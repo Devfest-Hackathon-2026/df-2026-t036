@@ -1,5 +1,7 @@
 # EWOCURU
 
+開発文書の入口は [ドキュメント案内](docs/README.md) です。
+
 「描いてほしい」と「描いてみたい」をつなぐ、お絵描きマッチングサービスです。Flutter（`flont/`）とFastAPI（`back/`）を使って開発します。フロントエンドのフォルダ名は、このプロジェクトでは `flont` としています。
 
 環境構築・起動・動作確認・Cloud Runへのデプロイ方法は [environment.md](docs/environment.md) を参照してください。
