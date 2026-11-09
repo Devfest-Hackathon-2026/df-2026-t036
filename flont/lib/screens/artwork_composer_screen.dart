@@ -531,12 +531,8 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                                     ),
                               contentPadding: EdgeInsets.zero,
                               controlAffinity: ListTileControlAffinity.leading,
+                              // 公開設定はチェック欄のラベルで示す。
                               title: const Text('受信者にプロフィールを公開する'),
-                              subtitle: compact
-                                  ? null
-                                  : const Text(
-                                      'オンにするとユーザーネーム・自己紹介・SNSリンクを見られます。初期設定は非公開です。',
-                                    ),
                             ),
                             SizedBox(height: compact ? 8 : 16),
                             // 余った高さはここで受け、送信操作を画面下側へ配置する。
@@ -562,14 +558,6 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                                     : '送信する',
                               ),
                             ),
-                            SizedBox(height: compact ? 8 : 12),
-                            if (!compact)
-                              Text(
-                                'HEIC/HEIFは表示できない環境があります。画像は審査後に送信されます。',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
                           ],
                         ],
                       ),
