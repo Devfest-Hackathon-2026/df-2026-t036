@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+tests/
+# ローカル設定と認証ファイルをビルドコンテキストから除外する。
+.local.env
+.env.*
+*.pem
+*credentials*.json

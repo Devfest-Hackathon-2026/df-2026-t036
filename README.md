@@ -1,3 +1,32 @@
+# EWOCURU
+
+「描いてほしい」と「描いてみたい」をつなぐ、お絵描きマッチングサービスです。Flutter Web（flont/）とFastAPI（back/）で構成します。
+
+## 開発の入口
+
+- [環境構築](docs/environment.md)
+- [起動・停止・エラー対処](docs/startup.md)
+- [総合仕様](docs/specification.md)
+- [DB・API仕様](docs/database/DB_v0.md)
+- [ドキュメント一覧](docs/README.md)
+- [バージョン履歴](docs/version/README.md)
+- [CI/CD・公開・ブランチ運用](docs/ci-cd.md)
+
+通常ログインにはFirebase設定とAPI用ADCが必要です。画面だけの確認は [認証なしプレビュー](docs/startup.md#デザインだけ確認する) を使用してください。
+
+## 提出情報
+
+- 作品名：EWOCURU
+- 公開アプリ：https://ewocuru.web.app
+- 提出コード：開発リポジトリのmain（9669ec9b31d57cb2e15f730f3d2795359e953c58）を履歴ごと取り込み
+- 開発リポジトリ：https://github.com/outsidewhite/-Illustration-exchange
+
+このリポジトリは最終提出用です。GitHub Actions・Pagesは利用できないため、CIとCloud Run・Firebase Hostingへのデプロイは開発リポジトリで行います。このリポジトリへのpushだけでは本番へデプロイされません。
+
+以下に大会側の提出案内を残しています。
+
+---
+
 # DevFest Hackathon 2026 提出用リポジトリ
 
   DevFest Hackathon 2026 のチームの **最終提出用** リポジトリです。提出期限までに、作品のコードと資料をこのリポジトリに置いてください。

@@ -1,0 +1,13 @@
+services:
+  api:
+    build: ./back
+    ports:
+      - "8080:8080"
+    # Pythonでの起動と同じローカル設定を渡し、イメージには保存しない。
+    env_file:
+      - ./back/.local.env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
