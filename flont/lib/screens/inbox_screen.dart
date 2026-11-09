@@ -416,7 +416,8 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           onLike: artwork.submissionId == null
               ? null
               : () => _likeArtwork(artwork),
-          allowFileActions: _isPreview,
+          allowFileActions: true,
+          imageContentType: _isPreview ? 'image/png' : 'image/webp',
           onDelete: () => _deleteArtwork(artwork),
           onMarkRead: artwork.submissionId == null
               ? null

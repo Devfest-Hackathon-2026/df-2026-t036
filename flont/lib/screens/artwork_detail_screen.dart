@@ -18,6 +18,7 @@ class ArtworkDetailScreen extends StatefulWidget {
     this.now,
     this.onLike,
     this.allowFileActions = false,
+    this.imageContentType = 'image/webp',
     this.onSave,
     this.onDelete,
   });
@@ -30,6 +31,7 @@ class ArtworkDetailScreen extends StatefulWidget {
   final DateTime Function()? now;
   final Future<void> Function()? onLike;
   final bool allowFileActions;
+  final String imageContentType;
   final Future<void> Function(Uint8List bytes)? onSave;
   final Future<void> Function()? onDelete;
 
@@ -206,7 +208,14 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
       if (widget.onSave != null) {
         await widget.onSave!(bytes);
       } else {
-        await saveArtworkFile(bytes, 'artwork.png');
+        final extension = widget.imageContentType == 'image/png'
+            ? 'png'
+            : 'webp';
+        await saveArtworkFile(
+          bytes,
+          'artwork.$extension',
+          contentType: widget.imageContentType,
+        );
       }
       if (mounted) {
         ScaffoldMessenger.of(
