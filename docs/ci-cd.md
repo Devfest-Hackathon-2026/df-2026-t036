@@ -2,11 +2,10 @@
 
 テストとCloud Run、Firebase Hosting、ブランチ運用をまとめています。CIはmain・develop向けPRと両ブランチの更新で実行します。環境の起動とは区別してください。
 
-## 統合元：ci-cd.md
 
-# GitHub Actions: テストとCloud Runデプロイ
+## テストとCloud Runデプロイ
 
-PRおよびmain更新時に、Python 3.11のpytest・pip check、Flutter 3.47.9の解析・テスト・Webビルド、Linux/amd64のDockerビルドと起動確認を実行します。Flutterはlockfileが要求するSDKに合わせています。実際の.local.envやFirebase設定、Google Cloud認証はCIでは不要です。サンプルFirebase設定をコピーしたWebビルドは検証用で、Hostingには公開しません。
+main・develop向けPRと両ブランチの更新時に、Python 3.11のpytest・pip check、Flutter 3.47.9の解析・テスト・Webビルド、Linux/amd64のDockerビルドと起動確認を実行します。Flutterはlockfileが要求するSDKに合わせています。実際の.local.envやFirebase設定、Google Cloud認証はCIでは不要です。サンプルFirebase設定をコピーしたWebビルドは検証用で、Hostingには公開しません。
 
 ## 自動デプロイの有効化
 
@@ -43,11 +42,9 @@ mainのブランチ保護でBackend tests、Flutter checks、Docker build and sm
 
 公式資料: [GitHub OIDC認証](https://github.com/google-github-actions/auth#setting-up-workload-identity-federation)、[デプロイパイプラインのWIF](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines)、[Flutter Action](https://github.com/subosito/flutter-action)。
 
----
 
-## 統合元：firebase-hosting.md
 
-# Firebase Hostingへの公開
+## Firebase Hostingへの公開
 
 公開ディレクトリは `flont/build/web` です。Firestoreのルール・インデックスは既存設定を維持し、Hostingだけを明示して公開します。
 
@@ -73,11 +70,9 @@ Cloud Run実行用サービスアカウントは `illustration-api-runtime@proje
 公開先サイトIDは `ewocuru` です。`firebase.json` の hosting.site で指定します。旧サイトは削除していません。新ドメインの `ewocuru.web.app` と `ewocuru.firebaseapp.com` をFirebase Authenticationの承認済みドメインにも登録します。
 
 
----
 
-## 統合元：branch-workflow.md
 
-# ブランチ運用
+## ブランチ運用
 
 機能開発・修正は作業ブランチからdevelopへのPRで取り込み、リリース時は同じリポジトリのdevelopからmainへPRを作成します。デフォルトブランチはdevelopです。
 
