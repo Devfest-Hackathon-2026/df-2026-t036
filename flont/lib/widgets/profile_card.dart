@@ -33,7 +33,7 @@ class _ProfileCardState extends State<ProfileCard>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 350),
     );
   }
 
@@ -63,7 +63,8 @@ class _ProfileCardState extends State<ProfileCard>
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, child) {
-            final angle = _controller.value * math.pi;
+            final angle =
+                Curves.easeInOutCubic.transform(_controller.value) * math.pi;
             final isBack = angle >= math.pi / 2;
 
             return Transform(
