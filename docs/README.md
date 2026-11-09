@@ -14,10 +14,14 @@
 | 法務 | [利用規約](legal/terms-test.md)、[プライバシーポリシー](legal/privacy-policy-v0.md) |
 | 版別更新履歴 | [バージョン一覧](version/README.md) |
 
+## アーキテクチャ図
+
+[ブラウザーで表示・編集](architecture/architecture_v0.html) ／ [PNG（ライト）](architecture/architecture_v0.png) ／ [PNG（ダーク）](architecture/architecture_v0-dark.png)
+
 ## 管理方針
 
 - 起動コマンドはstartup、初回設定はenvironmentを正本とします。各READMEは案内に留めます。
 - backはAPI実装・認証・定期処理、flontは画面・端末側の動作、databaseはDB・API契約です。
-- architectureは構成図です。HTML・SVG・PNGは同じ図の表示形式として扱い、すべてを別の仕様書として更新しません。
-- 統合した文書の旧設計・未決事項は各文書内の記録として保持しています。「実装前」「案」は当時の記載であり、現行の説明と区別します。
+- architectureは全体構成の補助図です。DBの保存階層・API契約の正本はdatabase/DB_v0.mdです。
+- 現行仕様と未対応事項だけを記載します。旧設計はGit履歴で参照し、本文に残しません。
 - 法務のreview文書は運営内の確認事項です。アプリに表示する本文とは分けて残します。
