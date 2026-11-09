@@ -8,14 +8,19 @@ class PageLayout {
     this.horizontalPaddingOverride,
   });
 
+  // Shared vertical spacing based on the logo-to-tag gap.
+  static const double verticalGap = 8;
+
   final double maxWidth;
   final double padding;
   final double? horizontalPaddingOverride;
 
   // スマホは左右にごく小さい余白を入れ、上下の余白は維持する。
   double get horizontalPadding => horizontalPaddingOverride ?? padding;
-  EdgeInsets get insets =>
-      EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: padding);
+  EdgeInsets get insets => EdgeInsets.symmetric(
+    horizontal: horizontalPadding,
+    vertical: verticalGap,
+  );
 
   // 外側に余白を置く画面でも、本文の左右位置をそろえる。
   // 本文も三段階の幅で広げ、区分内では指定寸法を維持する。

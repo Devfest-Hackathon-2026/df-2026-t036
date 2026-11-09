@@ -322,4 +322,18 @@ void main() {
 
     expect(navigationBar.selectedIndex, 1);
   });
+  testWidgets('tabs are built on first visit and retain state', (tester) async {
+    await tester.pumpWidget(const IllustrationExchangeApp(home: MainScreen()));
+    expect(find.byType(IdeasScreen, skipOffstage: false), findsNothing);
+    expect(find.byType(InboxScreen, skipOffstage: false), findsNothing);
+    expect(find.byType(ProfileScreen, skipOffstage: false), findsNothing);
+    await tester.tap(find.byType(NavigationDestination).at(1));
+    await tester.pumpAndSettle();
+    final initialState = tester.state(find.byType(IdeasScreen));
+    await tester.tap(find.byType(NavigationDestination).at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(NavigationDestination).at(1));
+    await tester.pumpAndSettle();
+    expect(tester.state(find.byType(IdeasScreen)), same(initialState));
+  });
 }
