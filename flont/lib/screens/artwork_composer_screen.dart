@@ -532,9 +532,11 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                               contentPadding: EdgeInsets.zero,
                               controlAffinity: ListTileControlAffinity.leading,
                               title: const Text('受信者にプロフィールを公開する'),
-                              subtitle: const Text(
-                                'オンにするとユーザーネーム・自己紹介・SNSリンクを見られます。初期設定は非公開です。',
-                              ),
+                              subtitle: compact
+                                  ? null
+                                  : const Text(
+                                      'オンにするとユーザーネーム・自己紹介・SNSリンクを見られます。初期設定は非公開です。',
+                                    ),
                             ),
                             SizedBox(height: compact ? 8 : 16),
                             // 余った高さはここで受け、送信操作を画面下側へ配置する。
