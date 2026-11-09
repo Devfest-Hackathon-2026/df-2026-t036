@@ -176,4 +176,4 @@ DBのコレクション・ID参照は [DB構造図（HTML）](docs/database/data
 
 - [環境構築](docs/environment.md)
 - [起動・停止とトラブル対処](docs/startup.md)
-- [変更履歴](docs/CHANGELOG.md)
+- [変更履歴](docs/version/README.md)

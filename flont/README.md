@@ -1,6 +1,6 @@
 # Flutterの起動方法
 
-APIのDocker起動（ADC受け渡しを含む）と停止方法は [ローカルの起動方法](../docs/startup.md) を参照してください。環境の初回準備は [環境構築](../docs/environment.md)、機能の更新内容は [変更履歴](../docs/CHANGELOG.md) にまとめています。
+APIのDocker起動（ADC受け渡しを含む）と停止方法は [ローカルの起動方法](../docs/startup.md) を参照してください。環境の初回準備は [環境構築](../docs/environment.md)、機能の更新内容は [変更履歴](../docs/version/README.md) にまとめています。
 
 ## 初回設定
 
