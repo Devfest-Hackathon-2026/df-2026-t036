@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../widgets/page_loading_gap.dart';
 import 'package:http/http.dart' as http;
 
 import 'idea_composer_screen.dart';
@@ -449,20 +450,27 @@ class _IdeasScreenState extends State<IdeasScreen> {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: ListView(
-          padding: layout.insets,
+          padding: EdgeInsets.only(
+            left: layout.horizontalPadding,
+            right: layout.horizontalPadding,
+            bottom: PageLayout.verticalGap,
+          ),
           children: [
+            PageLoadingGap(
+              loading: _showBookmarks ? _bookmarksLoading : _isLoading,
+            ),
             Text(
               _showBookmarks ? '保存したアイデア' : 'アイデアノート',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: PageLayout.verticalGap),
             Text(
               _showBookmarks
                   ? 'タイムラインのしおりから、5件まで保存できます。'
                   : '空き枠から、新しいアイデアを投稿できます。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: PageLayout.verticalGap),
             Align(
               alignment: Alignment.centerLeft,
               child: SizedBox(
@@ -515,9 +523,8 @@ class _IdeasScreenState extends State<IdeasScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: PageLayout.verticalGap),
             if (_showBookmarks) ...[
-              if (_bookmarksLoading) const LinearProgressIndicator(),
               if (_bookmarksError != null) ...[
                 Text(_bookmarksError!),
                 TextButton(onPressed: _loadBookmarks, child: const Text('再試行')),
@@ -525,10 +532,10 @@ class _IdeasScreenState extends State<IdeasScreen> {
               // 保存済みと空き枠を合わせ、常に五つのスロットを並べる。
               for (var index = 0; index < _slotCount; index++) ...[
                 _buildBookmarkSlot(index),
-                if (index < _slotCount - 1) const SizedBox(height: 12),
+                if (index < _slotCount - 1)
+                  const SizedBox(height: PageLayout.verticalGap),
               ],
             ] else ...[
-              if (_isLoading) const LinearProgressIndicator(),
               if (_loadError != null) ...[
                 Text(_loadError!),
                 TextButton(
@@ -538,7 +545,8 @@ class _IdeasScreenState extends State<IdeasScreen> {
               ],
               for (var index = 0; index < _slotCount; index++) ...[
                 _buildSlot(index),
-                if (index < _slotCount - 1) const SizedBox(height: 12),
+                if (index < _slotCount - 1)
+                  const SizedBox(height: PageLayout.verticalGap),
               ],
             ],
           ],

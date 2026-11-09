@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../widgets/page_loading_gap.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/idea_card.dart';
@@ -398,11 +399,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
         constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: Column(
           children: [
+            PageLoadingGap(loading: _loading),
             ...[
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   layout.horizontalPadding,
-                  8,
+                  0,
                   layout.horizontalPadding,
                   0,
                 ),
@@ -416,7 +418,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     layout.horizontalPadding,
-                    4,
+                    PageLayout.verticalGap,
                     layout.horizontalPadding,
                     0,
                   ),
@@ -430,7 +432,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
                   ),
                 ),
             ],
-            if (_loading) const LinearProgressIndicator(),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.all(12),
@@ -461,7 +462,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     padding: layout.insets,
                     itemCount: 2,
                     separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
+                        const SizedBox(height: PageLayout.verticalGap),
                     itemBuilder: (context, index) {
                       if (index == 1) {
                         if (_page == 0 && _nextCursor == null) {
@@ -508,6 +509,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       }
                       return MasonryLayout(
                         columns: columns,
+                        spacing: PageLayout.verticalGap,
                         children: _ideas.map(_buildIdeaCard).toList(),
                       );
                     },
