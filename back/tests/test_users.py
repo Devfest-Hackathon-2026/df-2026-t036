@@ -67,8 +67,14 @@ def test_register_and_retry_preserves_all_documents(store):
         assert me.json() == retry.json()
         assert me.headers["cache-control"] == "private, no-store"
         assert set(me.json()) == {
-            "uid", "nickname", "status", "ideaCount", "drawnCount", "likesReceived",
-            "bio", "socialLinks",
+            "uid",
+            "nickname",
+            "status",
+            "ideaCount",
+            "drawnCount",
+            "likesReceived",
+            "bio",
+            "socialLinks",
         }
         assert me.json()["bio"] == ""
         assert me.json()["socialLinks"] == []

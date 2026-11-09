@@ -531,11 +531,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                                     ),
                               contentPadding: EdgeInsets.zero,
                               controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(
-                                compact
-                                    ? 'プロフィールを受信者に公開'
-                                    : '受信者にプロフィールを公開する',
-                              ),
+                              title: const Text('受信者にプロフィールを公開する'),
                               subtitle: compact
                                   ? null
                                   : const Text(
@@ -566,13 +562,14 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                                     : '送信する',
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'HEIC/HEIFは表示できない環境があります。画像は審査後に送信されます。',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            SizedBox(height: compact ? 8 : 12),
+                            if (!compact)
+                              Text(
+                                'HEIC/HEIFは表示できない環境があります。画像は審査後に送信されます。',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
-                            ),
                           ],
                         ],
                       ),
