@@ -297,6 +297,48 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _deleteArtwork(ReceivedArtwork artwork) async {
+    final id = artwork.submissionId!;
+    if (_isPreview) {
+      setState(() {
+        _previewDeleted.add(id);
+        _imageCache.remove(id);
+        _resetPage();
+      });
+      return;
+    }
+    final token = widget.idTokenProvider == null
+        ? await FirebaseAuth.instance.currentUser?.getIdToken()
+        : await widget.idTokenProvider!();
+    if (token == null || token.isEmpty) {
+      throw StateError('再度ログインしてください。');
+    }
+    final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _client
+        .delete(
+          Uri.parse('$base/api/v1/artworks/${Uri.encodeComponent(id)}'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 204) {
+      var message = '作品を削除できませんでした。';
+      try {
+        message = ((jsonDecode(utf8.decode(response.bodyBytes))
+                    as Map<String, dynamic>)['error']
+                as Map<String, dynamic>)['message']
+            as String;
+      } catch (_) {}
+      throw StateError(message);
+    }
+    _imageCache.remove(id);
+    if (mounted) {
+      setState(() {
+        _inbox.removeWhere((item) => item.submissionId == id);
+        _resetPage();
+      });
+    }
+  }
+
   void _retainCachedImages() {
     _imageCache.retain({
       for (final artwork in _artworks)
@@ -375,18 +417,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
               ? null
               : () => _likeArtwork(artwork),
           allowFileActions: _isPreview,
-          onDelete: _isPreview
-              ? () async {
-                  if (!mounted) {
-                    throw StateError('Inbox is no longer available');
-                  }
-                  setState(() {
-                    _previewDeleted.add(artwork.submissionId!);
-                    _imageCache.remove(artwork.submissionId!);
-                    _resetPage();
-                  });
-                }
-              : null,
+          onDelete: () => _deleteArtwork(artwork),
           onMarkRead: artwork.submissionId == null
               ? null
               : () => _markArtworkRead(artwork),

@@ -1,5 +1,8 @@
 """受信作品一覧、描いた履歴、既読・いいね操作と受信者限定の画像配信。"""
 
+from datetime import timedelta
+import re
+
 from firebase_admin import firestore
 from fastapi import APIRouter, Query, Request, Response
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -16,6 +19,9 @@ from .schemas import ApiModel, Page, PageQuery
 from .upload_limits import MAX_DEMO_UPLOAD_BYTES
 
 router = APIRouter(prefix="/api/v1")
+_SUBMISSION_ID = re.compile(r"^[0-9a-f]{64}$")
+_ARTWORK_DELETE_LIMIT = 20
+_ARTWORK_DELETE_WINDOW = timedelta(hours=1)
 
 
 class IdeaSnapshot(ApiModel):
@@ -232,6 +238,45 @@ def _like(db, uid: str, submission_id: str) -> LikeResult:
     return apply(transaction)
 
 
+def _delete_artwork(db, uid: str, submission_id: str) -> None:
+    """受信者のみ削除を予約する。画像と作品文書の物理削除は内部処理に委ねる。"""
+    if not _SUBMISSION_ID.fullmatch(submission_id):
+        raise _unavailable()
+    user_ref = db.collection("users").document(uid)
+    artwork_ref = db.collection("artworks").document(submission_id)
+
+    @firestore.transactional
+    def apply(tx):
+        user = user_ref.get(transaction=tx)
+        artwork = artwork_ref.get(transaction=tx)
+        if not user.exists:
+            raise _unavailable()
+        user_data = user.to_dict()
+        active(user_data)
+        now = utc_now()
+        attempts = [stamp for stamp in user_data.get("artworkDeleteAttempts", [])
+                    if stamp > now - _ARTWORK_DELETE_WINDOW]
+        if len(attempts) >= _ARTWORK_DELETE_LIMIT:
+            raise ApiError(429, "RATE_LIMITED", "削除要求の上限に達しました。時間をおいて再試行してください。")
+        # 有効形式のIDに対する不存在・他人宛て要求も数え、ID列挙を抑える。
+        tx.update(user_ref, {"artworkDeleteAttempts": [*attempts, now]})
+        if not artwork.exists:
+            return False
+        data = artwork.to_dict()
+        if data.get("recipientId") != uid:
+            return False
+        # 同一利用者の繰り返し要求は冪等に成功する。
+        if data.get("deletedAt") is not None:
+            return True
+        if data.get("expiresAt") is None or data["expiresAt"] <= now:
+            return False
+        tx.update(artwork_ref, {"deletedAt": now})
+        return True
+
+    if not apply(db.transaction()):
+        raise _unavailable()
+
+
 @router.get("/me/artworks/inbox", response_model=InboxPage)
 async def get_inbox(user: ActiveUser, query: PageQuery = Query()):
     return await run_in_threadpool(lambda: _list_inbox(database(), user["uid"], query))
@@ -250,6 +295,12 @@ async def read_artwork(submission_id: str, user: ActiveUser):
 @router.post("/artworks/{submission_id}/like", response_model=LikeResult)
 async def like_artwork(submission_id: str, user: ActiveUser):
     return await run_in_threadpool(lambda: _like(database(), user["uid"], submission_id))
+
+
+@router.delete("/artworks/{submission_id}", status_code=204, response_model=None)
+async def delete_artwork(submission_id: str, user: ActiveUser):
+    await run_in_threadpool(lambda: _delete_artwork(database(), user["uid"], submission_id))
+    return Response(status_code=204)
 
 
 def _authorized_image(db, uid: str, submission_id: str) -> dict:
