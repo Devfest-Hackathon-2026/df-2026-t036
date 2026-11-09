@@ -1,6 +1,6 @@
 # お題・スロット・ピン API 設計
 
-- 基準: [`database/DB_v0.md`](database/DB_v0.md) v0.9
+- 基準: [`database/DB_v0.md`](DB_v0.md) v0.9
 - 対象: お題作成・一覧・詳細・削除、本人の掲載スロット、ピンの取得・追加・解除
 - API prefix: `/api/v1`。`/health`を除きFirebase IDトークン必須
 - 状態: 実装契約。Storage・作品送信APIは対象外
