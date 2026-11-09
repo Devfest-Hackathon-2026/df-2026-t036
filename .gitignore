@@ -32,3 +32,37 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# 開発元のローカル設定・認証情報・生成物の除外設定を引き継ぐ。
+# ローカル環境や認証情報は共有しない。
+.env
+/flont/firebase-config.local.json
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+.idea/
+.vscode/
+/back/.local.env
+/back/try_vision.py
+# 図の生成に使用する一時ツールとロゴは共有対象から除外する。
+.tmp/
+
+# Flutterのローカル生成物をルート設定でも明示的に除外する。
+/flont/.dart_tool/
+/flont/build/
+/flont/android/local.properties
+/back/.local.env
+
+# IDEが生成するプロジェクトファイルは配置場所を問わず除外する。
+*.iml
+
+# Firebase CLIの公開キャッシュと認証関連の診断ログは共有しない。
+/.firebase/
+/firebase-debug*.log
+
+# PowerShellが生成するローカルキャッシュはGit管理しない。
+/Microsoft/
