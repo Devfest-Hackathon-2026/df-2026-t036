@@ -191,7 +191,8 @@ JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後�
 | 未実装 | `POST /artworks/commit` | アップロード実体・形式・サイズ・送信資格を再検証し、画像を正規化して作品・描いた履歴・累計・セッション状態を一度だけ確定する。Cloud StorageとFirestoreの回復可能な連携が必要。 |
 | 未実装 | `GET /artworks/{submissionId}/image` | 受信者・期限・削除状態を確認して画像を認証付きで返す。Cloud Storage連携が必要。公開URLや長期有効URLは返さない。 |
 | 未実装 | `GET /artworks/{submissionId}/download` | 画像APIと同じ認可を適用し、正規化画像を添付ファイルとして返す。Cloud Storage連携が必要。 |
-| 未実装 | `DELETE /artworks/{submissionId}` | 受信者のみ作品を即時不可視化する。画像の物理削除は定期整理で再試行できるようにする。 |
+| コード実装・未検証 | `DELETE /artworks/{submissionId}` | 受信者だけが論理削除を要求する。作品単位の時間制限を適用し、物理削除は内部定期処理へ委ねる。 |
+| コード実装・未検証 | `POST /internal/artwork-expiry-cleanup` | 期限・手動削除済みの作品画像を削除し、成功後`purgeAt`を設定する。Firestore TTLポリシーとSchedulerは環境適用が必要。 |
 | 未実装 | `POST /internal/cleanup` | 内部呼び出しを認証し、期限切れ作品・一時セッション・一時画像・無効ピン等を上限付きで整理する。Cloud Storage連携とScheduler等の呼出設定が必要。 |
 
 未実装の作品送信・画像取得・削除・期限整理は、メタデータAPIとは別の作業段階。特にprepare/commitおよびimage/download/cleanupはCloud Storageを伴う。read/like・履歴・受信箱は画像バイト列を扱わない。Flutter側では画像が表示できてからreadを呼び、Storage実体の受け渡しとAPI認可を分離する。
@@ -235,7 +236,7 @@ Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaは�
 5. 期限切れセッションはexpiredへ遷移してから掃除し、commitと競合させる。committedが参照する完成画像は消さず、入力一時画像と審査staging画像だけ回収する。
 6. 未確定セッションは1回の掃除直後に消さず、実行中処理・発行済み書込権限の終了を待つ猶予期間中、繰り返し掃除する。猶予期間・処理上限を実装前に決定し、遅れて保存された画像も回収する。
 
-受信作品はdeletedAt設定時またはexpiresAt到達で即時に取得不可。定期処理は画像を削除してから作品文書を消す。失敗時は文書・パスを残して再試行。既にない画像は成功扱い。作品文書や掃除前のセッションへ直接TTLを設定しない。多重起動を避け、失敗をサーバーログに残す。
+受信作品はdeletedAt設定時またはexpiresAt到達で即時に取得不可。定期処理は画像を削除し、成功した場合に限り作品文書へTTL専用`purgeAt`を記録する。Firestore TTLは`artworks.purgeAt`に設定し、文書を非同期削除する。Storage削除失敗時は`purgeAt`を設定せず、文書・パスを残して再試行する。既にない画像は成功扱い。`expiresAt`をTTL対象にしてはならない。TTLはStorage画像を削除しない。多重起動を避け、失敗をサーバーログに残す。
 
 ## 6. 検索・認可・運用
 
