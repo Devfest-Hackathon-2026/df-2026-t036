@@ -57,7 +57,19 @@ Googleでログイン後、APIが初回登録または既存情報の取得を�
 flutter run -d chrome --dart-define=DEV_PREVIEW=true
 ```
 
-API・Googleログインを使わず、サンプルのユーザー情報で画面を表示します。「プレビュー」のバナーが目印です。DB接続・登録・ログアウトの動作確認には通常起動を使用してください。プレビューはdebug時のみ有効です。
+API・Googleログインを使わず、サンプルのユーザー情報で画面を表示します。「プレビュー」のバナーが目印です。DB接続・登録・ログアウトの動作確認には通常起動を使用してください。`DEV_PREVIEW=true` を明示した起動だけで有効です。
+
+プレビューの「プロフィールを編集」は画面表示の確認用で、保存内容はその起動中の画面だけに反映します。通常起動でログインして「プロフィールを編集」から保存すると、`PATCH /api/v1/me/profile` でバックエンドへ保存し、再読み込み後も保持します。バックエンドにこのAPIが未反映の場合は、APIを再起動または再デプロイしてください。
+
+### Chromeのデバッグ接続がタイムアウトする場合
+
+`WebkitDebugger.enable` / `Failed to connect to the web debug service` が出た場合、依存関係取得やFlutter Webのビルドではなく、Chrome DevToolsとのデバッグ接続で停止しています。Chrome/Flutterの組み合わせによって起きる環境側の問題で、Chrome debugモードではこのプロジェクトのホットリロードを使えないことがあります。まずEdgeのリリースプレビューを使って画面を確認してください。
+
+```powershell
+flutter run -d edge --release --web-hostname 127.0.0.1 --web-port 3000 --dart-define=DEV_PREVIEW=true
+```
+
+この方法は画面表示を確認できますが、debug接続とホットリロードは使えません。`DEV_PREVIEW=true` を明示すればリリース実行でもサンプルプロフィールを表示します。通常のdebug起動を優先する場合は、ブラウザー/Flutterの更新後にChromeまたはEdgeのdebug起動を再度試します。起動したプレビューはターミナルで `q` を押すと終了します。
 
 ### 受信画像保存のローカル確認
 

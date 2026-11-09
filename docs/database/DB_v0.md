@@ -13,7 +13,8 @@
 | 機能 | 今回の方針 |
 |---|---|
 | ログイン | 画面のGoogleログイン。招待コード・メール許可リストなし |
-| 表示名 | 初回登録時にサーバーでランダム生成し保存。変更機能なし |
+| 表示名 | 初回登録時にサーバーでランダム生成。以降は本人がプロフィール編集で変更可能 |
+| プロフィール文・SNSリンク | 任意の自己紹介とHTTPSリンクをusers/{uid}へ保存し、本人更新・公開項目のみ取得 |
 | お題・ピン | 5スロット、タグ、ピン5件、7日／30日のルールを維持 |
 | 作品 | JPEG/PNG/HEIC/HEIF入力（WebP入力非対応）、WebP完成画像、1人1お題1回、受信者限定、送信から7日 |
 | 受信箱 | 自動更新、作品の未読・既読を維持 |
@@ -29,7 +30,7 @@ Firebaseプロジェクト
 ├─ Authentication
 │   └─ Googleアカウント（uid）
 ├─ Firestore
-│   ├─ users/{uid}                  ランダム表示名・状態・累計
+│   ├─ users/{uid}                  ランダム表示名・状態・累計・自己紹介・SNSリンク
 │   │   └─ drawnHistory/{submissionId} 描いた履歴（別文書）
 │   ├─ userSlots/{uid}              掲載枠（独立文書）
 │   │   └─ slots                   文書内map。サブコレクションではない
@@ -42,7 +43,7 @@ Firebaseプロジェクト
     └─ 正規化済み作品画像（表示・保存に共用）
 ```
 
-B案を維持し、Firestore直下6種類とusers配下の履歴1種類で構成する。通知・publicProfiles・jobs・idempotencyKeysは設けない。サブコレクション更新だけでは親usersは更新されないが、累計更新や認可の読み取りによる競合は残る。
+B案を維持し、Firestore直下6種類とusers配下の履歴1種類で構成する。通知・publicProfiles・jobs・idempotencyKeysは設けない。公開プロフィールはusers文書の許可項目だけを公開API DTOで返す。自己紹介・SNSリンクは任意項目で、未設定時は空値として扱う。プロフィール画像・代表作品は画像保存・公開範囲の設計が別途必要なため、このAPIには含めない。サブコレクション更新だけでは親usersは更新されないが、累計更新や認可の読み取りによる競合は残る。
 
 構造図： [HTML](database_v0.html) ／ [PNG](database_v0.png) ／ [SVG](database_v0.svg)
 
@@ -68,22 +69,39 @@ B案を維持し、Firestore直下6種類とusers配下の履歴1種類で構成
 
 ## 2. コレクション定義
 
+### プロフィールAPI追加（バックエンド先行）
+
+| Method / path | 認証 | 用途 |
+|---|---|---|
+| `GET /api/v1/me` | Google認証・active | 本人情報に自己紹介 `bio` と `socialLinks` を含める |
+| `PATCH /api/v1/me/profile` | Google認証・active | `nickname`・`bio`・SNSリンク一式を更新。nicknameは省略可、部分フィールド・未知フィールドは受け付けない |
+| `GET /api/v1/users/{uid}/profile` | — | 削除済み。任意ユーザーがプロフィールを取得できる経路を閉じる |
+| `GET /api/v1/me/artworks/{submissionId}/artist-profile` | Firebase認証・作品の受信者 | 描き手が送信時に公開を選んだ作品に限りプロフィールを返す |
+
+`nickname` は1〜24文字、前後空白を除去し、空欄と制御文字を拒否する。省略された場合は従来値を維持する。`bio` は最大300文字、SNSリンクは最大5件。リンク種別は `x` / `instagram` / `pixiv` / `youtube` / `other`。全てHTTPSのみとし、各既知SNS種別は対応ホスト名を検証する。`other` は任意のHTTPSホストを許す。各リンクの `label` は1〜40文字、URLは最大2048文字。同一URLの重複は末尾スラッシュと大文字小文字を正規化して拒否する。集計値は更新不可。
+
+**次段階のプロフィール公開方針**: 作品送信時に描き手が受信者へのプロフィール公開を選ぶ。作品文書に `artistProfileVisibleToRecipient` を保存し、既定値はfalse。falseの場合はInbox DTOから `artistId` と `artistNickname` を省く。受信者限定取得APIは作品文書のrecipientId・公開選択・期限・削除状態を検証する。既存の広域プロフィールAPIはそのまま残さない。
+
+プロフィール画像・代表作品の登録APIは未実装。Cloud Storageでの公開方式、画像制限、公開同意、古い画像の削除方式を決めてから追加する。
+
 全てlowerCamelCase。UIDはFirebase Auth UID。文書IDは保存パスの一部であり、各文書への重複保存は必須ではない。
 
 ### 2.1 users/{uid}
 
 | フィールド | 型 | 意味 |
 |---|---|---|
-| nickname | string | 初回登録でサーバーがランダム生成して固定 |
+| nickname | string | 初回登録でサーバーがランダム生成。その後は本人がプロフィールAPIで更新可能 |
 | status | string | active / suspended。deletingは今回導入しない |
 | ideaCount | integer | 未削除のお題累計。30日経過で減らさず、手動削除時に1回だけ減算 |
 | drawnCount | integer | 確定送信累計。作品削除後も維持 |
 | likesReceived | integer | 描き手が受けたいいね累計。取消・作品削除による減算なし |
+| bio | string | 任意の公開自己紹介。最大300文字 |
+| socialLinks | array | 任意のHTTPS SNSリンク。最大5件 |
 | createdAt | timestamp | 登録時刻 |
 
-表示名の実装案：固定の単語リストとランダムな文字・数字を組み合わせる。重複を許可し、識別はUIDで行う。Googleの本名・メールから生成しない。登録を再送しても名前・カウンターを再生成しない。表示形式は未決定。
+表示名の初期生成案：固定の単語リストとランダムな文字・数字を組み合わせる。重複を許可し、識別はUIDで行う。Googleの本名・メールから生成しない。登録を再送しても名前・カウンターを再生成しない。プロフィール編集後は変更後の名前を表示する。
 
-メールはAuthにのみ保持。本人にはMe DTO、他人にはUIDとnicknameだけを公開する。お題一覧のownerNickname・受信一覧のartistNicknameへAPIがまとめて名前を付加し、1カードずつのAPI呼び出しを避ける。
+メールはAuthにのみ保持。本人にはMe DTOを返す。プロフィールDTO（UID・nickname・bio・socialLinks）は、描き手が送信時に公開を許可した作品の受信者に限り返す。お題一覧のownerNicknameはAPIがまとめて名前を付加する。受信箱のartistNicknameは公開許可がある場合だけ返す。一覧上の名前はプロフィール編集時点と異なる場合があり、プロフィール画面はAPIから最新値を取得する。
 
 ### 2.2 userSlots/{uid}
 
@@ -116,6 +134,7 @@ ideaIdはFlutterが操作ごとにUUID v4を生成し、同じ操作の再送で
 | recipientId | string | 受信者UID |
 | sourceIdeaId | string | 元のお題ID |
 | sourceIdeaSnapshot | map | title / description / tags / ownerIdの送信時点の複製 |
+| artistProfileVisibleToRecipient | boolean | 描き手が送信時に選択。既定false、未設定の旧作品もfalseとして扱う |
 | storagePath | string | 正規化済み画像1枚の非公開パス |
 | liked | boolean | 初期false、trueへの変更だけ許可 |
 | readAt | timestamp / null | 必須。初期null、受信者の初回詳細表示時に設定 |
@@ -162,7 +181,8 @@ JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後�
 | DELETE | /pins/{ideaId} | ピン解除。未登録・欠損でも成功 | 204 |
 | POST | /artworks/prepare | ideaId / contentType / byteSize | 201、uploadId / uploadUrl / method / requiredHeaders / expiresAt |
 | POST | /artworks/commit | uploadId。画像検証・送信資格再確認 | 初回201、同じuploadIdの再送200、submissionId / submittedAt |
-| GET | /me/artworks/inbox | 本人の有効な受信作品、自動更新対象 | 200、一覧 |
+| GET | /me/artworks/inbox | 本人の有効な受信作品、自動更新対象 | 200、一覧。非公開作品はartistId / artistNickname=null、artistProfileAvailable=false |
+| GET | /me/artworks/{submissionId}/artist-profile | 公開を選んだ作品の受信者だけに作者プロフィールを返す | 200、uid / nickname / bio / socialLinks |
 | POST | /artworks/{submissionId}/read | 受信者の初回既読、再送は初回時刻を維持 | 200、readAt |
 | GET | /artworks/{submissionId}/image | 受信者限定で正規化画像を配信 | 200、画像 |
 | GET | /artworks/{submissionId}/download | 同じ正規化画像を端末保存 | 200、画像 |
@@ -171,7 +191,7 @@ JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後�
 | GET | /me/drawn-history | 本人の履歴・参照可能なお題・最終いいね | 200、一覧 |
 | POST | /internal/cleanup | 内部認証で作品・一時画像・期限切れピンを整理 | 実装時に応答を固定 |
 
-名前変更・通知・退会のAPIは作らない。画像APIはCache-Control: private, no-store、保存APIはContent-Disposition: attachmentを付ける。公開URLや署名URLへのリダイレクトを返さない。
+通知・退会のAPIは作らない。画像APIはCache-Control: private, no-store、保存APIはContent-Disposition: attachmentを付ける。公開URLや署名URLへのリダイレクトを返さない。
 
 ### 実装進捗（2026-11-06）
 
@@ -199,7 +219,7 @@ JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後�
 
 現状、描いた履歴・受信箱・既読・いいねの追加コードはテスト実行環境の問題でpytest未実行であり、Firebase実データを用いた統合確認も未完了。Firestore複合インデックスをデプロイする環境では、同梱の `firestore.indexes.json` も適用する。
 
-Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaはお題の保存項目とideaId / ownerNickname / canPin / canSubmit。InboxItemはsubmissionId / artistId / artistNickname / sourceIdeaId / sourceIdeaSnapshot / liked / readAt / createdAt / expiresAt。Storageパスは返さない。履歴はsubmissionId / ideaId / submittedAt / lastLiked / idea / ideaAvailability、参照不可ならideaはnull。
+Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaはお題の保存項目とideaId / ownerNickname / canPin / canSubmit。InboxItemはsubmissionId / artistId / artistNickname / artistProfileAvailable / sourceIdeaId / sourceIdeaSnapshot / liked / readAt / createdAt / expiresAt。非公開作品ではartistId・artistNicknameをnullとし、profile APIは受信者だけに許可する。Storageパスは返さない。履歴はsubmissionId / ideaId / submittedAt / lastLiked / idea / ideaAvailability、参照不可ならideaはnull。
 
 ### 一覧・受信箱の自動更新（確定方針）
 
@@ -267,7 +287,7 @@ Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaは�
 - [ ] 画像保存後のDB失敗・並行commitから再試行しても同じ検証済み完成画像を再利用し、上書き・二重加算をしない。不一致はUPLOAD_CONFLICT。
 - [ ] 自動更新成功時に後続ページと旧カーソルを破棄し、失敗時は既存一覧を保持。更新前の遅延応答が混入しない。
 - [ ] 不存在・資格なし・削除済み・期限切れは「参照できません」、通信障害は再試行表示へ統一。
-- [ ] 通知・退会・名前変更の画面、API、データが今回の必須機能に含まれない。
+- [ ] 通知・退会の画面、API、データが今回の必須機能に含まれない。
 - [ ] サーバー設定で503へ切替・解除でき、全インスタンスへの反映、画像APIとcommitへの適用を確認する。
 - [ ] Firestore直接アクセス拒否とAPI認可を検証し、iPad・スマホ・PCで一連の操作を確認する。
 

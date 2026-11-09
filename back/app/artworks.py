@@ -17,6 +17,7 @@ from .firebase import database
 from .ideas import _cursor_decode, _cursor_encode
 from .schemas import ApiModel, Page, PageQuery
 from .upload_limits import MAX_DEMO_UPLOAD_BYTES
+from .users import PublicProfile, profile_fields
 
 router = APIRouter(prefix="/api/v1")
 _SUBMISSION_ID = re.compile(r"^[0-9a-f]{64}$")
@@ -33,8 +34,9 @@ class IdeaSnapshot(ApiModel):
 
 class InboxItem(ApiModel):
     submissionId: str
-    artistId: str
-    artistNickname: str
+    artistId: str | None = None
+    artistNickname: str | None = None
+    artistProfileAvailable: bool = False
     sourceIdeaId: str
     sourceIdeaSnapshot: IdeaSnapshot
     liked: bool
@@ -111,22 +113,76 @@ def _list_inbox(db, uid: str, query: PageQuery) -> InboxPage:
         request = request.start_after(cursor)
     docs = list(request.limit(query.limit + 1).stream())
     shown, more = docs[:query.limit], len(docs) > query.limit
-    artist_ids = list(dict.fromkeys(d.to_dict().get("artistId") for d in shown))
+    data_by_id = {doc.id: doc.to_dict() for doc in shown}
+    public_docs = [
+        data for data in data_by_id.values()
+        if data.get("artistProfileVisibleToRecipient") is True
+    ]
+    artist_ids = list(dict.fromkeys(data.get("artistId") for data in public_docs))
     refs = [db.collection("users").document(x) for x in artist_ids if isinstance(x, str)]
     artists = {s.id: s.to_dict() for s in db.get_all(refs)}
     items = []
     for doc in shown:
-        data = doc.to_dict()
+        data = data_by_id[doc.id]
         snapshot = data["sourceIdeaSnapshot"]
+        artist_id = data.get("artistId")
+        artist = artists.get(artist_id, {}) if data.get("artistProfileVisibleToRecipient") is True else {}
+        profile_available = (
+            data.get("artistProfileVisibleToRecipient") is True
+            and artist.get("status") == "active"
+            and isinstance(artist.get("nickname"), str)
+        )
         items.append(InboxItem(
-            submissionId=doc.id, artistId=data["artistId"],
-            artistNickname=artists.get(data["artistId"], {}).get("nickname", ""),
+            submissionId=doc.id,
+            artistId=artist_id if profile_available else None,
+            artistNickname=artist.get("nickname") if profile_available else None,
+            artistProfileAvailable=profile_available,
             sourceIdeaId=data["sourceIdeaId"], sourceIdeaSnapshot=snapshot,
             liked=data.get("liked", False), readAt=data.get("readAt"),
             createdAt=data["createdAt"], expiresAt=data["expiresAt"],
         ))
     return InboxPage(items=items, nextCursor=_cursor_encode("inbox", uid, shown[-1].id)
                      if more and shown else None, serverTime=now)
+
+
+def _artist_profile(db, recipient_uid: str, submission_id: str) -> PublicProfile:
+    """公開を選んだ有効な受信作品の作者情報だけを受信者へ返す。"""
+    if not _SUBMISSION_ID.fullmatch(submission_id):
+        raise _unavailable()
+    artwork_ref = db.collection("artworks").document(submission_id)
+
+    @firestore.transactional
+    def read_profile(transaction):
+        artwork_snapshot = artwork_ref.get(transaction=transaction)
+        if not artwork_snapshot.exists:
+            raise _unavailable()
+        artwork = artwork_snapshot.to_dict()
+        if (
+            artwork.get("recipientId") != recipient_uid
+            or artwork.get("artistProfileVisibleToRecipient") is not True
+            or artwork.get("deletedAt") is not None
+            or artwork.get("expiresAt") is None
+            or artwork["expiresAt"] <= utc_now()
+        ):
+            raise _unavailable()
+        artist_uid = artwork.get("artistId")
+        if not isinstance(artist_uid, str) or not artist_uid:
+            raise _unavailable()
+        artist_snapshot = db.collection("users").document(artist_uid).get(
+            transaction=transaction
+        )
+        if not artist_snapshot.exists:
+            raise _unavailable()
+        artist = artist_snapshot.to_dict()
+        if artist.get("status") != "active":
+            raise _unavailable()
+        return PublicProfile(
+            uid=artist_uid,
+            nickname=artist.get("nickname", ""),
+            **profile_fields(artist),
+        )
+
+    return read_profile(db.transaction())
 
 
 def _list_history(db, uid: str, query: PageQuery) -> HistoryPage:
@@ -280,6 +336,14 @@ def _delete_artwork(db, uid: str, submission_id: str) -> None:
 @router.get("/me/artworks/inbox", response_model=InboxPage)
 async def get_inbox(user: ActiveUser, query: PageQuery = Query()):
     return await run_in_threadpool(lambda: _list_inbox(database(), user["uid"], query))
+
+
+@router.get("/me/artworks/{submission_id}/artist-profile", response_model=PublicProfile)
+async def get_artist_profile(submission_id: str, user: ActiveUser):
+    """送信時に公開を選んだ作品の受信者だけに作者プロフィールを返す。"""
+    return await run_in_threadpool(
+        lambda: _artist_profile(database(), user["uid"], submission_id)
+    )
 
 
 @router.get("/me/drawn-history", response_model=HistoryPage)

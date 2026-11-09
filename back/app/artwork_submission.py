@@ -64,7 +64,7 @@ def check_eligibility(db, tx, uid, idea_id, user_ref, idea_ref, history_ref):
     return data, now
 
 
-def reserve(db, uid, idea_id, digest, bucket_name):
+def reserve(db, uid, idea_id, digest, bucket_name, share_artist_profile=False):
     sid, user, idea, history, submission = references(db, uid, idea_id)
     token = uuid4().hex
     attempt = db.collection('artworkUploads').document(token)
@@ -87,10 +87,19 @@ def reserve(db, uid, idea_id, digest, bucket_name):
         expires = now + LEASE
         path = f'artworks/{sid}/{token}.webp'
         # アップロード前に回収可能な記録を残す。試行ごとに別パスを使う。
-        tx.set(submission, {'status': 'processing', 'token': token, 'digest': digest, 'expiresAt': expires})
+        tx.set(submission, {
+            'status': 'processing', 'token': token, 'digest': digest,
+            'expiresAt': expires,
+            'artistProfileVisibleToRecipient': share_artist_profile,
+        })
         tx.set(attempt, {'submissionId': sid, 'token': token, 'bucket': bucket_name,
-                         'storagePath': path, 'status': 'processing', 'expiresAt': expires})
-        return None, {'submissionId': sid, 'token': token, 'storagePath': path, 'bucket': bucket_name}
+                         'storagePath': path, 'status': 'processing', 'expiresAt': expires,
+                         'artistProfileVisibleToRecipient': share_artist_profile})
+        return None, {
+            'submissionId': sid, 'token': token, 'storagePath': path,
+            'bucket': bucket_name,
+            'artistProfileVisibleToRecipient': share_artist_profile,
+        }
 
     return apply(db.transaction())
 
@@ -107,13 +116,19 @@ def finalize(db, uid, idea_id, attempt, digest):
         if reservation.get('status') == 'committed' and reservation.get('digest') == digest:
             return reservation['result']
         if (reservation.get('token') != attempt['token'] or reservation.get('status') != 'processing'
-                or upload_data.get('status') != 'processing' or reservation['expiresAt'] <= utc_now()):
+                or upload_data.get('status') != 'processing'
+                or reservation.get('artistProfileVisibleToRecipient')
+                is not attempt['artistProfileVisibleToRecipient']
+                or upload_data.get('artistProfileVisibleToRecipient')
+                is not attempt['artistProfileVisibleToRecipient']
+                or reservation['expiresAt'] <= utc_now()):
             raise ApiError(409, 'SUBMISSION_EXPIRED', '送信処理の有効期限が切れました。再試行してください。')
         data, now = check_eligibility(db, tx, uid, idea_id, user, idea, history)
         result = {'submissionId': sid, 'submittedAt': now.isoformat()}
         # 作品・履歴・累計・完了記録を同時に確定し、再送で累計を増やさない。
         tx.set(artwork, {'artistId': uid, 'recipientId': data['ownerId'], 'sourceIdeaId': idea_id,
                         'sourceIdeaSnapshot': {key: data[key] for key in ('title', 'description', 'tags', 'ownerId')},
+                        'artistProfileVisibleToRecipient': attempt['artistProfileVisibleToRecipient'],
                         'storagePath': attempt['storagePath'], 'storageBucket': attempt['bucket'],
                         'contentType': 'image/webp', 'liked': False, 'readAt': None,
                         'createdAt': now, 'expiresAt': now + timedelta(days=7), 'deletedAt': None,
@@ -198,11 +213,13 @@ def recover_untracked_objects(db, settings, client):
     return scanned
 
 
-def submit(db, settings, uid, idea_id, raw):
+def submit(db, settings, uid, idea_id, raw, share_artist_profile=False):
     if not settings.artwork_bucket:
         raise ApiError(503, 'STORAGE_NOT_CONFIGURED', '作品の保存先が設定されていません。')
     digest = hashlib.sha256(raw).hexdigest()
-    previous, attempt = reserve(db, uid, idea_id, digest, settings.artwork_bucket)
+    previous, attempt = reserve(
+        db, uid, idea_id, digest, settings.artwork_bucket, share_artist_profile
+    )
     if previous is not None:
         return previous, False
     client = None
@@ -252,13 +269,17 @@ def submit(db, settings, uid, idea_id, raw):
 
 @router.post('/artworks', status_code=201)
 async def post_artwork(request: Request, response: Response, user: ActiveUser,
-                       ideaId: str = Form(...), file: UploadFile = File(...)):
+                       ideaId: str = Form(...), file: UploadFile = File(...),
+                       shareArtistProfile: bool = Form(False)):
     """Flutterから画像を直接受け、審査成功後にだけ投稿を確定する。"""
     idea_id = _parse_idea_id(ideaId)
     raw = await file.read(MAX_DEMO_UPLOAD_BYTES + 1)
     if len(raw) > MAX_DEMO_UPLOAD_BYTES:
         raise ApiError(413, 'PAYLOAD_TOO_LARGE', '画像は20MB以下にしてください。')
-    result, created = await run_in_threadpool(lambda: submit(database(), request.app.state.settings, user['uid'], idea_id, raw))
+    result, created = await run_in_threadpool(lambda: submit(
+        database(), request.app.state.settings, user['uid'], idea_id, raw,
+        shareArtistProfile,
+    ))
     response.status_code = 201 if created else 200
     return result
 
