@@ -16,7 +16,7 @@
 
 ## アーキテクチャ図
 
-[ブラウザーで表示](architecture/architecture_v0.html) ／ [SVG](architecture/architecture_v0.svg) ／ [PNG](architecture/architecture_v0.png)
+[ブラウザーで表示・編集](architecture/architecture_v0.html) ／ [PNG（ライト）](architecture/architecture_v0.png) ／ [PNG（ダーク）](architecture/architecture_v0-dark.png)
 
 ## 管理方針
 
