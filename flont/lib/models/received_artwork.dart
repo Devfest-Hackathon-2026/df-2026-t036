@@ -8,6 +8,7 @@ class ReceivedArtwork {
     this.description,
     this.tags = const [],
     this.artistNickname,
+    this.artistProfileAvailable = false,
     this.createdAt,
     this.expiresAt,
     this.liked,
@@ -17,14 +18,15 @@ class ReceivedArtwork {
     final snapshot = json['sourceIdeaSnapshot'] as Map<String, dynamic>;
     return ReceivedArtwork(
       submissionId: json['submissionId'] as String,
-      artistId: json['artistId'] as String,
+      artistId: json['artistId'] as String?,
       sourceIdeaId: json['sourceIdeaId'] as String,
       title: snapshot['title'] as String,
       description: snapshot['description'] as String,
       tags: List<String>.unmodifiable(
         (snapshot['tags'] as List).cast<String>(),
       ),
-      artistNickname: json['artistNickname'] as String,
+      artistNickname: json['artistNickname'] as String?,
+      artistProfileAvailable: json['artistProfileAvailable'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
       expiresAt: DateTime.parse(json['expiresAt'] as String),
       readAt: json['readAt'] == null
@@ -43,6 +45,7 @@ class ReceivedArtwork {
     description: description,
     tags: tags,
     artistNickname: artistNickname,
+    artistProfileAvailable: artistProfileAvailable,
     createdAt: createdAt,
     expiresAt: expiresAt,
     liked: liked,
@@ -57,6 +60,7 @@ class ReceivedArtwork {
     description: description,
     tags: tags,
     artistNickname: artistNickname,
+    artistProfileAvailable: artistProfileAvailable,
     createdAt: createdAt,
     expiresAt: expiresAt,
     liked: true,
@@ -71,6 +75,7 @@ class ReceivedArtwork {
   final String? description;
   final List<String> tags;
   final String? artistNickname;
+  final bool artistProfileAvailable;
   final DateTime? createdAt;
   final DateTime? expiresAt;
   final bool? liked;

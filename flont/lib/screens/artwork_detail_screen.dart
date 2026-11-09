@@ -21,6 +21,7 @@ class ArtworkDetailScreen extends StatefulWidget {
     this.imageContentType = 'image/webp',
     this.onSave,
     this.onDelete,
+    this.onViewArtistProfile,
   });
 
   final ReceivedArtwork artwork;
@@ -34,6 +35,7 @@ class ArtworkDetailScreen extends StatefulWidget {
   final String imageContentType;
   final Future<void> Function(Uint8List bytes)? onSave;
   final Future<void> Function()? onDelete;
+  final VoidCallback? onViewArtistProfile;
 
   @override
   State<ArtworkDetailScreen> createState() => _ArtworkDetailScreenState();
@@ -416,7 +418,23 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
                       children: [
                         Text('作品情報', style: textTheme.titleMedium),
                         const SizedBox(height: 12),
-                        _info(context, '作者', artwork.artistNickname ?? '未取得'),
+                        if (artwork.artistProfileAvailable &&
+                            widget.onViewArtistProfile != null)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('作者'),
+                            subtitle: Text(artwork.artistNickname ?? '作者'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: _expired ? null : widget.onViewArtistProfile,
+                          )
+                        else
+                          _info(
+                            context,
+                            '作者',
+                            artwork.artistProfileAvailable
+                                ? artwork.artistNickname ?? '作者'
+                                : '非公開',
+                          ),
                         _info(context, '受信日時', _date(artwork.createdAt)),
                         _info(context, '閲覧期限', _date(artwork.expiresAt)),
                         _info(context, '残り時間', _remaining),

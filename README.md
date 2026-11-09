@@ -9,7 +9,7 @@
 
 Googleログイン、FastAPIでのIDトークン検証、Firestoreへの初回ユーザー登録、登録情報のマイページ表示を実装しています。接続には [Firebase認証の設定](docs/back/firebase-auth.md) が必要です。FastAPIの `/health`、DockerによるAPI起動、基本テストも用意しています。
 
-仕様上の目標構成は、Flutter WebをFirebase Hosting、FastAPIをCloud Runに配置し、Firebase Authentication・Cloud Firestore・Cloud Storage・Cloud Schedulerを組み合わせる構成です。お題・作品のAPIと画像処理、クラウドへのデプロイは未実施です。
+仕様上の目標構成は、FlutterをFirebase Hostingまたはアプリ配布、FastAPIをCloud Runに配置し、Firebase Authentication・Cloud Firestore・Cloud Storage・Cloud Schedulerを組み合わせる構成です。バックエンドにはCloud Run対応Dockerfileと条件付きデプロイ用GitHub Actionsがあります。GCP側の初期設定・デプロイ有効化・実サービスへのデプロイと本番疎通は環境依存のため、[CI/CD手順](docs/ci-cd.md)に従って別途確認してください。
 
 ## フォルダ構成
 

@@ -13,6 +13,7 @@ import '../widgets/artwork_opening_route.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
+import 'public_profile_screen.dart';
 import '../models/received_artwork.dart';
 import '../preview/artwork_preview.dart';
 import '../services/artwork_image_cache.dart';
@@ -323,10 +324,11 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     if (response.statusCode != 204) {
       var message = '作品を削除できませんでした。';
       try {
-        message = ((jsonDecode(utf8.decode(response.bodyBytes))
-                    as Map<String, dynamic>)['error']
-                as Map<String, dynamic>)['message']
-            as String;
+        message =
+            ((jsonDecode(utf8.decode(response.bodyBytes))
+                        as Map<String, dynamic>)['error']
+                    as Map<String, dynamic>)['message']
+                as String;
       } catch (_) {}
       throw StateError(message);
     }
@@ -422,6 +424,19 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           onMarkRead: artwork.submissionId == null
               ? null
               : () => _markArtworkRead(artwork),
+          onViewArtistProfile:
+              artwork.artistProfileAvailable && artwork.submissionId != null
+              ? () => Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => PublicProfileScreen(
+                      submissionId: artwork.submissionId!,
+                      apiBaseUrl: widget.apiBaseUrl,
+                      client: _client,
+                      idTokenProvider: widget.idTokenProvider,
+                    ),
+                  ),
+                )
+              : null,
         ),
       ),
     );

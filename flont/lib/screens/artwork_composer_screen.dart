@@ -55,6 +55,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
   http.Client? _activeClient;
   int _sendGeneration = 0;
   bool _previewAvailable = false;
+  bool _shareArtistProfile = false;
   int? _previewWidth;
   int? _previewHeight;
   ArtworkImageFormat? _format;
@@ -183,7 +184,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
         content: Text(
           widget.preview
               ? '「${widget.ideaTitle}」への送信操作を試します。\n$_filename ($_formatLabel)\nこれはデモです。画像は送信されません。'
-              : '「${widget.ideaTitle}」へ送信します。\n$_filename ($_formatLabel)\n\n送信後は取り消し・差し替えできません。画像の審査を通過すると投稿が確定します。',
+              : '「${widget.ideaTitle}」へ送信します。\n$_filename ($_formatLabel)\n\nプロフィール公開: ${_shareArtistProfile ? 'する' : 'しない'}\n送信後は取り消し・差し替えできません。画像の審査を通過すると投稿が確定します。',
         ),
         actions: [
           TextButton(
@@ -240,6 +241,7 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
               )
               ..headers['Authorization'] = 'Bearer $token'
               ..fields['ideaId'] = widget.ideaId
+              ..fields['shareArtistProfile'] = '$_shareArtistProfile'
               ..files.add(
                 http.MultipartFile.fromBytes(
                   'file',
@@ -518,6 +520,20 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                               '自作の静止画を選択してください。生成AI画像は送信できません。',
                               style: theme.textTheme.bodyMedium,
                             ),
+                            CheckboxListTile(
+                              key: const ValueKey('share-artist-profile'),
+                              value: _shareArtistProfile,
+                              onChanged: _sending || _retryPending
+                                  ? null
+                                  : (value) => setState(
+                                      () =>
+                                          _shareArtistProfile = value ?? false,
+                                    ),
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              // 公開設定はチェック欄のラベルで示す。
+                              title: const Text('受信者にプロフィールを公開する'),
+                            ),
                             SizedBox(height: compact ? 8 : 16),
                             // 余った高さはここで受け、送信操作を画面下側へ配置する。
                             const Spacer(),
@@ -540,13 +556,6 @@ class _ArtworkComposerScreenState extends State<ArtworkComposerScreen> {
                                     : _retryPending
                                     ? '同じ画像で再試行'
                                     : '送信する',
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'HEIC/HEIFは表示できない環境があります。画像は審査後に送信されます。',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],

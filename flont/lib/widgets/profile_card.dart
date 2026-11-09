@@ -5,6 +5,7 @@ class ProfileCard extends StatefulWidget {
   final String nickname;
   final String? backgroundImage;
   final String? avatarImage;
+  final double width;
   final int ideaCount;
   final int drawingCount;
   final int likeCount;
@@ -14,6 +15,7 @@ class ProfileCard extends StatefulWidget {
     required this.nickname,
     this.backgroundImage,
     this.avatarImage,
+    this.width = 320,
     this.ideaCount = 0,
     this.drawingCount = 0,
     this.likeCount = 0,
@@ -58,7 +60,7 @@ class _ProfileCardState extends State<ProfileCard>
     return GestureDetector(
       onTap: _flipCard,
       child: SizedBox(
-        width: 320,
+        width: widget.width,
         height: 500,
         child: AnimatedBuilder(
           animation: _controller,
