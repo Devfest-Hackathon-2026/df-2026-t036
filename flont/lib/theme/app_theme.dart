@@ -4,16 +4,16 @@ import 'package:google_fonts/google_fonts.dart';
 /// EWOCURUの配色を一元管理し、独自描画の装飾でも同じ色を使う。
 abstract final class AppColors {
   static const main = Color(0xFFC7EDFF);
-  // 共通アクセント二色。枠線は既存のoutlineと彩度・明度をそろえる。
-  static final accentGreen = HSLColor.fromColor(outline).withHue(140).toColor();
-  static final accentYellow = HSLColor.fromColor(outline).withHue(48).toColor();
-  // 背景には同じアクセントの色相と、メイン色の明るさを使用する。
-  static final ownIdea = HSLColor.fromColor(
-    main,
-  ).withHue(HSLColor.fromColor(accentGreen).hue).toColor();
-  static final drawnIdea = HSLColor.fromColor(
-    main,
-  ).withHue(HSLColor.fromColor(accentYellow).hue).toColor();
+  // Keep each fill unchanged and derive a slightly darker matching border.
+  static Color borderFor(Color base) {
+    final hsl = HSLColor.fromColor(base);
+    return hsl.withLightness((hsl.lightness - 0.08).clamp(0.0, 1.0)).toColor();
+  }
+
+  static final ownIdea = HSLColor.fromColor(main).withHue(140).toColor();
+  static final drawnIdea = HSLColor.fromColor(main).withHue(48).toColor();
+  static final accentGreen = borderFor(ownIdea);
+  static final accentYellow = borderFor(drawnIdea);
   // Stable tag colors derived from the shared brand palette.
   static final tagBackgrounds = <Color>[
     main,
@@ -27,7 +27,7 @@ abstract final class AppColors {
   static const text = sub;
   // 補助色は基本パレットから派生させ、画面ごとの色追加を防ぐ。
   static const muted = Color(0xFF66788A);
-  static const outline = Color(0xFFDCEAF2);
+  static const outline = Color(0xFF9EDDFF);
   static const shadow = Color(0x14173C70);
 }
 

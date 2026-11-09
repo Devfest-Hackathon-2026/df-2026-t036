@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/page_layout.dart';
+import '../widgets/page_loading_gap.dart';
 import '../widgets/profile_card.dart';
 import 'idea_history_screen.dart';
 import 'drawing_history_screen.dart';
@@ -180,8 +181,13 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: ListView(
-          padding: layout.insets,
+          padding: EdgeInsets.only(
+            left: layout.horizontalPadding,
+            right: layout.horizontalPadding,
+            bottom: PageLayout.verticalGap,
+          ),
           children: [
+            PageLoadingGap(loading: _loading),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -202,7 +208,6 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             ),
 
-            if (_loading) const LinearProgressIndicator(),
             if (_error != null)
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -215,7 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ],
               ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: PageLayout.verticalGap),
 
             // プロフィールカード
             Center(
@@ -227,7 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: PageLayout.verticalGap),
 
             const Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -239,11 +244,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: PageLayout.verticalGap),
 
             Text('創作の履歴', style: Theme.of(context).textTheme.titleMedium),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: PageLayout.verticalGap),
 
             Card(
               child: Column(

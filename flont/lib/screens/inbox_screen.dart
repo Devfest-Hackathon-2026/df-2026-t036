@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../widgets/page_loading_gap.dart';
 import '../theme/app_theme.dart';
 import '../widgets/received_artwork_card.dart';
 import '../widgets/artwork_opening_route.dart';
@@ -655,28 +656,23 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     final titles = _titles;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxHeight < 520;
-        final headingGap = compact ? 8.0 : 16.0;
         // 下部操作は本文内に置き、固定せずカードと一緒にスクロールさせる。
         return SingleChildScrollView(
-          padding: layout.insets,
+          padding: EdgeInsets.symmetric(horizontal: layout.horizontalPadding),
           child: Center(
             child: ConstrainedBox(
               // 外側の余白も含めた全体幅を他の画面にそろえる。
               constraints: BoxConstraints(maxWidth: layout.contentWidth),
               child: SizedBox(
-                height: (constraints.maxHeight - layout.insets.vertical).clamp(
-                  240.0,
-                  double.infinity,
-                ),
+                height: constraints.maxHeight.clamp(240.0, double.infinity),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    PageLoadingGap(loading: _loading),
                     Text(
                       '受信箱',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    if (_loading) const LinearProgressIndicator(),
                     if (_error != null)
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
@@ -690,13 +686,13 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                           ),
                         ],
                       ),
-                    SizedBox(height: headingGap),
+                    const SizedBox(height: PageLayout.verticalGap),
                     Expanded(
                       child: ClipRect(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 24,
-                            vertical: 32,
+                            vertical: PageLayout.verticalGap,
                           ),
                           child: Center(
                             child: ConstrainedBox(

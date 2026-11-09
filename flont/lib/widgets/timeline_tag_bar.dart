@@ -103,7 +103,7 @@ class _TimelineTagBarState extends State<TimelineTagBar> {
                             side: BorderSide(
                               color: selected
                                   ? AppColors.sub
-                                  : AppColors.outline,
+                                  : AppColors.borderFor(background),
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,
