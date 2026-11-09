@@ -87,6 +87,11 @@ class _CardHoverGlowState extends State<CardHoverGlow>
         final strength = fade * (0.65 + 0.35 * pulse);
         final radius = BorderRadius.circular(widget.radius);
         return Container(
+          transform: Matrix4.translationValues(
+            0,
+            _reduceMotion ? 0 : -2 * fade,
+            0,
+          ),
           decoration: BoxDecoration(
             borderRadius: radius,
             boxShadow: [
