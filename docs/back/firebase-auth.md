@@ -39,7 +39,7 @@ cd back
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8080
 ```
 
-ADC設定を変更したらAPIを再起動します。サービスアカウントの秘密鍵をFlutterへ渡したりGitへ追加したりしないでください。上記はPythonで直接起動する手順です。Dockerの場合は認証ファイルの読み取り専用マウントと `GOOGLE_APPLICATION_CREDENTIALS` / `GOOGLE_CLOUD_PROJECT` の受け渡しを別途設定する必要があります。
+ADC設定を変更したらAPIを再起動します。サービスアカウントの秘密鍵をFlutterへ渡したりGitへ追加したりしないでください。上記はPythonで直接起動する手順です。Dockerの具体的な起動コマンドは [起動方法](../startup.md) を参照してください。Dockerの場合は認証ファイルの読み取り専用マウントと `GOOGLE_APPLICATION_CREDENTIALS` / `GOOGLE_CLOUD_PROJECT` の受け渡しを別途設定する必要があります。
 
 ## Flutter Web
 

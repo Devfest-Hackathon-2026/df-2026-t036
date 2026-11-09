@@ -1,5 +1,7 @@
 # Flutterの起動方法
 
+APIのDocker起動（ADC受け渡しを含む）と停止方法は [ローカルの起動方法](../docs/startup.md) を参照してください。環境の初回準備は [環境構築](../docs/environment.md)、機能の更新内容は [変更履歴](../docs/CHANGELOG.md) にまとめています。
+
 ## 初回設定
 
 リポジトリ直下で実行します。
@@ -95,7 +97,7 @@ Flutterは `q`、APIは `Ctrl+C` で停止します。通常起動とプレビ�
 | ポート使用中 | 以前のFlutter/APIを停止するか別ポートを使用 |
 | Runtime.evaluate / Cannot find context | Flutterを停止して、生成されたChromeを開き直す |
 
-共通デザインは [design.md](design.md)、実装は [lib/theme/app_theme.dart](lib/theme/app_theme.dart) を参照してください。
+共通デザインは [design.md](../docs/flont/design.md)、実装は [lib/theme/app_theme.dart](lib/theme/app_theme.dart) を参照してください。
 
 ## APIとFlutterの設定の分離
 
