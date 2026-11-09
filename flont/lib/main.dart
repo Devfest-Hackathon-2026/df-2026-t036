@@ -4,6 +4,7 @@ import 'package:illustration_exchange/screens/main_screen.dart';
 import 'auth_gate.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_scroll_behavior.dart';
+import 'widgets/font_loading_gate.dart';
 
 const _developmentPreview = bool.fromEnvironment('DEV_PREVIEW');
 
@@ -31,23 +32,25 @@ class IllustrationExchangeApp extends StatelessWidget {
       // 開発プレビューはデバッグ時だけ有効にし、通常は認証画面から開始する。
       home:
           home ??
-          (kDebugMode && _developmentPreview
-              ? const Banner(
-                  message: 'プレビュー',
-                  location: BannerLocation.topEnd,
-                  child: MainScreen(
-                    me: {
-                      'uid': 'preview-user',
-                      'nickname': 'プレビュー利用者',
-                      'status': 'active',
-                      'ideaCount': 2,
-                      'drawnCount': 4,
-                      'likesReceived': 3,
-                    },
-                    googleEmail: 'preview@example.test',
-                  ),
-                )
-              : const AuthGate()),
+          FontLoadingGate(
+            child: (kDebugMode && _developmentPreview
+                ? const Banner(
+                    message: 'プレビュー',
+                    location: BannerLocation.topEnd,
+                    child: MainScreen(
+                      me: {
+                        'uid': 'preview-user',
+                        'nickname': 'プレビュー利用者',
+                        'status': 'active',
+                        'ideaCount': 2,
+                        'drawnCount': 4,
+                        'likesReceived': 3,
+                      },
+                      googleEmail: 'preview@example.test',
+                    ),
+                  )
+                : const AuthGate()),
+          ),
     );
   }
 }
