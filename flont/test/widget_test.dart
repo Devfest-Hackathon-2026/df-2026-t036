@@ -133,11 +133,16 @@ void main() {
       '窓辺で本を読む猫と、湯気の立つココア。',
     );
     await tester.enterText(find.byKey(const ValueKey('idea-tag-input')), '日常');
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('idea-add-tag')));
     await tester.pumpAndSettle();
 
     final previewButton = find.byKey(const ValueKey('idea-preview-button'));
-    await tester.ensureVisible(previewButton);
+    await tester.scrollUntilVisible(
+      previewButton,
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(previewButton);
     await tester.pumpAndSettle();

@@ -314,12 +314,39 @@ class _IdeasScreenState extends State<IdeasScreen> {
     }
   }
 
+  Future<List<String>> _loadTagSuggestions() async {
+    if (_isPreview) {
+      return _slotIdeas
+          .whereType<IdeaSlotData>()
+          .expand((idea) => idea.previewTags)
+          .toSet()
+          .toList();
+    }
+    if (!widget.authenticated) return [];
+    final token = await _getIdToken();
+    final response = await _client
+        .get(
+          Uri.parse(
+            '${widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/ideas?limit=1',
+          ),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw StateError(_messageFromResponse(response));
+    }
+    final body =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return (body['tags'] as List? ?? []).cast<String>();
+  }
+
   void _openComposer(int slotIndex) {
     final ideaId = _newIdeaId();
     Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => IdeaComposerScreen(
           onSubmit: (draft) => _submitIdea(slotIndex, ideaId, draft),
+          loadTagSuggestions: _loadTagSuggestions,
         ),
       ),
     );

@@ -16,9 +16,14 @@ class IdeaDraft {
 }
 
 class IdeaComposerScreen extends StatefulWidget {
-  const IdeaComposerScreen({super.key, required this.onSubmit});
+  const IdeaComposerScreen({
+    super.key,
+    required this.onSubmit,
+    this.loadTagSuggestions,
+  });
 
   final Future<void> Function(IdeaDraft draft) onSubmit;
+  final Future<List<String>> Function()? loadTagSuggestions;
 
   @override
   State<IdeaComposerScreen> createState() => _IdeaComposerScreenState();
@@ -30,38 +35,81 @@ class _IdeaComposerScreenState extends State<IdeaComposerScreen> {
   final _descriptionController = TextEditingController();
   final _tagController = TextEditingController();
   final List<String> _tags = [];
+  List<String> _suggestions = [];
+  bool _loadingSuggestions = false;
+  bool _suggestionsFailed = false;
+  String? _tagError;
   bool _showPreview = false;
   bool _submitting = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _tagController.addListener(_onTagChanged);
+    _loadSuggestions();
+  }
+
+  void _onTagChanged() => setState(() => _tagError = null);
+
+  Future<void> _loadSuggestions() async {
+    final load = widget.loadTagSuggestions;
+    if (load == null || _loadingSuggestions) return;
+    setState(() {
+      _loadingSuggestions = true;
+      _suggestionsFailed = false;
+    });
+    try {
+      final tags = await load();
+      if (!mounted) return;
+      setState(() {
+        _suggestions =
+            tags
+                .map((tag) => tag.trim())
+                .where((tag) => tag.isNotEmpty && tag.runes.length <= 20)
+                .toSet()
+                .toList()
+              ..sort();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _suggestionsFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingSuggestions = false);
+    }
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _tagController.removeListener(_onTagChanged);
     _tagController.dispose();
     super.dispose();
   }
 
-  void _addTag() {
-    final tag = _tagController.text.trim();
-    if (tag.isEmpty) return;
+  bool _addTag([String? suggestion]) {
+    final tag = (suggestion ?? _tagController.text).trim();
+    if (tag.isEmpty) return true;
     if (tag.runes.length > 20) {
-      setState(() => _error = 'タグは20文字以内で入力してください。');
-      return;
+      setState(() => _tagError = 'タグは20文字以内で入力してください。');
+      return false;
     }
     if (!_tags.contains(tag) && _tags.length >= 5) {
-      setState(() => _error = 'タグは5個まで追加できます。');
-      return;
+      setState(() => _tagError = 'タグは5個まで追加できます。');
+      return false;
     }
     setState(() {
       if (!_tags.contains(tag)) _tags.add(tag);
       _tagController.clear();
-      _error = null;
+      _tagError = null;
     });
+    return true;
   }
 
   void _showConfirmation() {
     if (!_formKey.currentState!.validate()) return;
+    if (!_addTag()) return;
+    FocusScope.of(context).unfocus();
     setState(() {
       _error = null;
       _showPreview = true;
@@ -164,47 +212,7 @@ class _IdeaComposerScreenState extends State<IdeaComposerScreen> {
             },
           ),
           const SizedBox(height: 12),
-          Text('タグ（任意・最大5個）', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('idea-tag-input'),
-                  controller: _tagController,
-                  maxLength: 20,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _addTag(),
-                  decoration: const InputDecoration(
-                    labelText: 'タグ',
-                    hintText: '例：ファンタジー',
-                    counterText: '',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                key: const ValueKey('idea-add-tag'),
-                tooltip: 'タグを追加',
-                onPressed: _addTag,
-                icon: const Icon(Icons.add),
-              ),
-            ],
-          ),
-          if (_tags.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                for (final tag in _tags)
-                  InputChip(
-                    label: Text(tag),
-                    onDeleted: () => setState(() => _tags.remove(tag)),
-                  ),
-              ],
-            ),
-          ],
+          _buildTagInput(context),
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(
@@ -221,6 +229,97 @@ class _IdeaComposerScreenState extends State<IdeaComposerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTagInput(BuildContext context) {
+    final input = _tagController.text.trim();
+    final candidates = _suggestions
+        .where(
+          (tag) =>
+              !_tags.contains(tag) && (input.isEmpty || tag.contains(input)),
+        )
+        .take(8)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'タグ（任意） (${_tags.length} / 5)',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        if (_tags.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in _tags)
+                InputChip(
+                  label: Text(tag),
+                  onDeleted: () => setState(() {
+                    _tags.remove(tag);
+                    _tagError = null;
+                  }),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 8),
+        TextField(
+          key: const ValueKey('idea-tag-input'),
+          controller: _tagController,
+          maxLength: 20,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) {
+            final composing = _tagController.value.composing;
+            if (!composing.isValid || composing.isCollapsed) _addTag();
+          },
+          decoration: InputDecoration(
+            labelText: 'タグを入力',
+            hintText: '例：ファンタジー',
+            counterText: '',
+            helperText: '候補をタップ、または入力して追加',
+            errorText: _tagError,
+          ),
+        ),
+        if (input.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            key: const ValueKey('idea-add-tag'),
+            onPressed: () => _addTag(),
+            icon: const Icon(Icons.add),
+            label: Text('「$input」を追加'),
+          ),
+        ],
+        if (_loadingSuggestions) ...[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(minHeight: 2),
+        ],
+        if (_suggestionsFailed)
+          TextButton.icon(
+            onPressed: _loadSuggestions,
+            icon: const Icon(Icons.refresh),
+            label: const Text('候補を再読み込み'),
+          ),
+        if (candidates.isNotEmpty && _tags.length < 5) ...[
+          const SizedBox(height: 8),
+          Text('使われているタグ', style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in candidates)
+                ActionChip(
+                  avatar: const Icon(Icons.add, size: 16),
+                  label: Text(tag),
+                  onPressed: () => _addTag(tag),
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
