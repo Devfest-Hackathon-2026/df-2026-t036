@@ -14,6 +14,10 @@
 | 法務 | [利用規約](legal/terms-test.md)、[プライバシーポリシー](legal/privacy-policy-v0.md) |
 | 版別更新履歴 | [バージョン一覧](version/README.md) |
 
+## アーキテクチャ図
+
+[ブラウザーで表示](architecture/architecture_v0.html) ／ [SVG](architecture/architecture_v0.svg) ／ [PNG](architecture/architecture_v0.png)
+
 ## 管理方針
 
 - 起動コマンドはstartup、初回設定はenvironmentを正本とします。各READMEは案内に留めます。
