@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'card_hover_glow.dart';
 
 /// タイトル・ブックマーク・タグ・日付をまとめ、内容に合わせて高さを調整するカード。
 class IdeaCard extends StatelessWidget {
@@ -36,102 +37,121 @@ class IdeaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (sketchStyle) return _SketchIdeaCard(card: this);
+    if (sketchStyle) {
+      return CardHoverGlow(
+        color: AppColors.borderFor(backgroundColor ?? AppColors.main),
+        radius: 12,
+        enabled: onTap != null || onPinPressed != null,
+        child: _SketchIdeaCard(card: this),
+      );
+    }
     final colors = Theme.of(context).colorScheme;
     final local = date.toLocal();
     final label =
         '${local.year}.${local.month.toString().padLeft(2, '0')}.${local.day.toString().padLeft(2, '0')}';
-    return Card(
-      color: backgroundColor,
-      shape: borderColor == null
-          ? null
-          : RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-              side: BorderSide(color: borderColor!, width: 1.5),
-            ),
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 12, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ブックマークをタイトル横へ置き、上部だけの余白をなくす。
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              height: 1.4,
-                            ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (showBookmark)
-                    IconButton(
-                      tooltip: pinned ? 'ブックマークを解除' : 'ブックマークに保存',
-                      onPressed: onPinPressed,
-                      color: colors.primary,
-                      icon: Icon(
-                        pinned ? Icons.bookmark : Icons.bookmark_border,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // タグと日付を同じ行に置き、タグだけを残り幅で折り返す。
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          for (final tag in tags)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.primaryContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '#$tag',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: colors.onPrimaryContainer,
-                                    ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+    return CardHoverGlow(
+      color: backgroundColor == null
+          ? borderColor ?? AppColors.outline
+          : AppColors.borderFor(backgroundColor!),
+      radius: AppTheme.cardRadius,
+      enabled: onTap != null || onPinPressed != null,
+      child: Card(
+        color: backgroundColor,
+        shape: borderColor == null
+            ? null
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                side: BorderSide(
+                  color: backgroundColor == null
+                      ? borderColor!
+                      : AppColors.borderFor(backgroundColor!),
+                  width: 1.5,
                 ),
               ),
-            ],
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 12, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ブックマークをタイトル横へ置き、上部だけの余白をなくす。
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                height: 1.4,
+                              ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (showBookmark)
+                      IconButton(
+                        tooltip: pinned ? 'ブックマークを解除' : 'ブックマークに保存',
+                        onPressed: onPinPressed,
+                        color: colors.primary,
+                        icon: Icon(
+                          pinned ? Icons.bookmark : Icons.bookmark_border,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // タグと日付を同じ行に置き、タグだけを残り幅で折り返す。
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            for (final tag in tags)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.primaryContainer,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '#$tag',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: colors.onPrimaryContainer,
+                                      ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -149,7 +169,6 @@ class _SketchIdeaCard extends StatefulWidget {
 }
 
 class _SketchIdeaCardState extends State<_SketchIdeaCard> {
-  bool _hovered = false;
   bool _pressed = false;
 
   @override
@@ -163,7 +182,9 @@ class _SketchIdeaCardState extends State<_SketchIdeaCard> {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
-      side: const BorderSide(color: AppColors.outline),
+      side: BorderSide(
+        color: AppColors.borderFor(card.backgroundColor ?? AppColors.main),
+      ),
     );
     return AnimatedContainer(
       duration: reduceMotion
@@ -172,28 +193,16 @@ class _SketchIdeaCardState extends State<_SketchIdeaCard> {
       curve: Curves.easeOut,
       transform: Matrix4.translationValues(
         0,
-        reduceMotion
-            ? 0
-            : (_pressed
-                  ? 1
-                  : _hovered
-                  ? -2
-                  : 0),
+        reduceMotion ? 0 : (_pressed ? 1 : 0),
         0,
       ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: AppColors.sub.withValues(
-              alpha: _pressed
-                  ? 0.025
-                  : _hovered
-                  ? 0.075
-                  : 0.035,
-            ),
-            blurRadius: _hovered && !_pressed ? 18 : 10,
-            offset: Offset(0, _hovered && !_pressed ? 6 : 3),
+            color: AppColors.sub.withValues(alpha: _pressed ? 0.025 : 0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -203,7 +212,7 @@ class _SketchIdeaCardState extends State<_SketchIdeaCard> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: card.onTap,
-          onHover: (value) => setState(() => _hovered = value),
+          hoverColor: Colors.transparent,
           onHighlightChanged: (value) => setState(() => _pressed = value),
           splashColor: AppColors.main.withValues(alpha: 0.25),
           highlightColor: AppColors.main.withValues(alpha: 0.12),
