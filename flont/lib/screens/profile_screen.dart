@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/page_layout.dart';
+import '../widgets/page_loading_gap.dart';
 import '../widgets/profile_card.dart';
+import 'profile_editor_screen.dart';
 import 'idea_history_screen.dart';
 import 'drawing_history_screen.dart';
 import 'settings_screen.dart';
@@ -45,13 +46,15 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _generation = 0;
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
 
+  bool get _previewMode => const bool.fromEnvironment('DEV_PREVIEW');
+
   bool get _canLoad =>
       mounted &&
       widget.active &&
       !_routeOpen &&
       _lifecycle == AppLifecycleState.resumed &&
       widget.me?['uid'] is String &&
-      !(kDebugMode && const bool.fromEnvironment('DEV_PREVIEW'));
+      !_previewMode;
 
   @override
   void initState() {
@@ -165,6 +168,83 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (_canLoad) await _refresh();
   }
 
+  Future<void> _openProfileEditor() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => ProfileEditorScreen(
+          nickname: _me?['nickname'] as String? ?? '',
+          bio: _me?['bio'] as String? ?? '',
+          socialLinks: (_me?['socialLinks'] as List<dynamic>? ?? const [])
+              .whereType<Map>()
+              .map((link) => Map<String, dynamic>.from(link))
+              .toList(growable: false),
+          previewOnly: _previewMode,
+          onSave: _saveProfile,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _me = result);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_previewMode ? 'プレビューに反映しました' : 'プロフィールを保存しました')),
+    );
+  }
+
+  Future<Map<String, dynamic>> _saveProfile(
+    String nickname,
+    String bio,
+    List<Map<String, dynamic>> socialLinks,
+  ) async {
+    if (_previewMode) {
+      return {
+        ...?_me,
+        'nickname': nickname,
+        'bio': bio,
+        'socialLinks': socialLinks,
+      };
+    }
+    final token = widget.idTokenProvider == null
+        ? await FirebaseAuth.instance.currentUser?.getIdToken()
+        : await widget.idTokenProvider!();
+    if (token == null || token.isEmpty) throw StateError('再度ログインしてください。');
+    final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _client
+        .patch(
+          Uri.parse('$base/api/v1/me/profile'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'nickname': nickname,
+            'bio': bio,
+            'socialLinks': socialLinks,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    Map<String, dynamic> body;
+    try {
+      body =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      throw StateError('サーバーからの応答を読み取れませんでした。もう一度お試しください。');
+    }
+    if (response.statusCode != 200) {
+      final error = body['error'];
+      final message = error is Map<String, dynamic>
+          ? error['message'] as String? ?? 'プロフィールを保存できませんでした。'
+          : 'プロフィールを保存できませんでした。';
+      throw StateError(message);
+    }
+    if (body['uid'] != widget.me?['uid'] ||
+        body['nickname'] != nickname ||
+        body['bio'] != bio ||
+        body['socialLinks'] is! List) {
+      throw StateError('保存結果を確認できませんでした。再読み込みしてご確認ください。');
+    }
+    return body;
+  }
+
   @override
   void dispose() {
     _invalidate();
@@ -176,12 +256,20 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     final layout = PageLayout.of(context);
+    final profileCardWidth = layout.contentWidth < 320
+        ? layout.contentWidth
+        : 320.0;
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: layout.bodyWidth),
         child: ListView(
-          padding: layout.insets,
+          padding: EdgeInsets.only(
+            left: layout.horizontalPadding,
+            right: layout.horizontalPadding,
+            bottom: PageLayout.verticalGap,
+          ),
           children: [
+            PageLoadingGap(loading: _loading),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -202,7 +290,17 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             ),
 
-            if (_loading) const LinearProgressIndicator(),
+            if (_me != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: const ValueKey('profile-edit'),
+                  onPressed: _openProfileEditor,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('プロフィールを編集'),
+                ),
+              ),
+
             if (_error != null)
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -215,11 +313,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ],
               ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: PageLayout.verticalGap),
+
+            _buildPublicProfilePreview(context),
+
+            const SizedBox(height: PageLayout.verticalGap),
 
             // プロフィールカード
             Center(
               child: ProfileCard(
+                width: profileCardWidth,
                 nickname: _me?['nickname'] as String? ?? '未ログイン',
                 ideaCount: _me?['ideaCount'] as int? ?? 0,
                 drawingCount: _me?['drawnCount'] as int? ?? 0,
@@ -227,7 +330,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: PageLayout.verticalGap),
 
             const Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -239,11 +342,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: PageLayout.verticalGap),
 
             Text('創作の履歴', style: Theme.of(context).textTheme.titleMedium),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: PageLayout.verticalGap),
 
             Card(
               child: Column(
@@ -284,6 +387,88 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPublicProfilePreview(BuildContext context) {
+    final theme = Theme.of(context);
+    final bio = _me?['bio'] as String? ?? '';
+    final links = (_me?['socialLinks'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((link) => Map<String, dynamic>.from(link))
+        .toList(growable: false);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.account_circle_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('プロフィール', style: theme.textTheme.titleMedium),
+                ),
+                if (_previewMode)
+                  Text('公開表示イメージ', style: theme.textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              bio.isEmpty ? '自己紹介はまだありません' : bio,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: bio.isEmpty ? theme.colorScheme.onSurfaceVariant : null,
+              ),
+            ),
+            if (links.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              for (final link in links)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.open_in_new, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              link['label'] as String? ?? 'SNSリンク',
+                              style: theme.textTheme.labelLarge,
+                            ),
+                            Text(
+                              link['url'] as String? ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text('SNSリンクは未登録です', style: theme.textTheme.bodySmall),
+            ],
+            if (_previewMode) ...[
+              const SizedBox(height: 12),
+              Text(
+                'ここに表示される内容はプレビュー用サンプルです。',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),

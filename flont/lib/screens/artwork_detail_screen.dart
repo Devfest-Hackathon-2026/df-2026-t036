@@ -18,8 +18,10 @@ class ArtworkDetailScreen extends StatefulWidget {
     this.now,
     this.onLike,
     this.allowFileActions = false,
+    this.imageContentType = 'image/webp',
     this.onSave,
     this.onDelete,
+    this.onViewArtistProfile,
   });
 
   final ReceivedArtwork artwork;
@@ -30,8 +32,10 @@ class ArtworkDetailScreen extends StatefulWidget {
   final DateTime Function()? now;
   final Future<void> Function()? onLike;
   final bool allowFileActions;
+  final String imageContentType;
   final Future<void> Function(Uint8List bytes)? onSave;
   final Future<void> Function()? onDelete;
+  final VoidCallback? onViewArtistProfile;
 
   @override
   State<ArtworkDetailScreen> createState() => _ArtworkDetailScreenState();
@@ -206,7 +210,14 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
       if (widget.onSave != null) {
         await widget.onSave!(bytes);
       } else {
-        await saveArtworkFile(bytes, 'artwork.png');
+        final extension = widget.imageContentType == 'image/png'
+            ? 'png'
+            : 'webp';
+        await saveArtworkFile(
+          bytes,
+          'artwork.$extension',
+          contentType: widget.imageContentType,
+        );
       }
       if (mounted) {
         ScaffoldMessenger.of(
@@ -407,7 +418,23 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen>
                       children: [
                         Text('作品情報', style: textTheme.titleMedium),
                         const SizedBox(height: 12),
-                        _info(context, '作者', artwork.artistNickname ?? '未取得'),
+                        if (artwork.artistProfileAvailable &&
+                            widget.onViewArtistProfile != null)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('作者'),
+                            subtitle: Text(artwork.artistNickname ?? '作者'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: _expired ? null : widget.onViewArtistProfile,
+                          )
+                        else
+                          _info(
+                            context,
+                            '作者',
+                            artwork.artistProfileAvailable
+                                ? artwork.artistNickname ?? '作者'
+                                : '非公開',
+                          ),
                         _info(context, '受信日時', _date(artwork.createdAt)),
                         _info(context, '閲覧期限', _date(artwork.expiresAt)),
                         _info(context, '残り時間', _remaining),

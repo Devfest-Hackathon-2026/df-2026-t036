@@ -30,7 +30,7 @@ cd back
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8080
 ```
 
-`MAINTENANCE_MODE` はtrue/falseのみ、再試行秒数は正整数です。CORSはカンマ区切りの明示的なOriginを指定し、ワイルドカードは拒否します。ローカル開発時だけ `CORS_ALLOW_LOCALHOST=true` を指定すると、HTTPのlocalhost・127.0.0.1の可変ポートも許可します。既定はfalseで、本番では有効にしません。認証付きPOSTと今後の削除・更新に対応しています。
+`MAINTENANCE_MODE` はtrue/falseのみ、再試行秒数は正整数です。CORSはカンマ区切りの明示的なOriginを指定し、ワイルドカードは拒否します。ローカル開発時だけ `CORS_ALLOW_LOCALHOST=true` を指定すると、HTTPのlocalhost・127.0.0.1の可変ポートも許可します。既定はfalseで、本番では有効にしません。認証付きPOST・削除・更新に対応しています。
 
 設定変更は再起動で反映します。Cloud Runでは同じ設定を持つリビジョンへ切り替え、旧リビジョンへトラフィックが残っていないことを確認します。Composeは `back/.local.env` を `env_file` で自動的に渡します。envファイルはDockerイメージには含めません。ADCは別途読み取り専用マウントと `GOOGLE_APPLICATION_CREDENTIALS` の設定が必要です。Cloud Runではサービスに設定した環境変数と実行サービスアカウントを利用します。
 
@@ -42,7 +42,20 @@ cd back
 - 書き込みトランザクションでは、事前の依存関係だけに頼らず状態を再読込します。競合中の停止や期限到達を見落とさないためです。
 - UIDは認証結果を使い、本文・クエリに入ったUIDを操作主体にしません。
 
-`POST /api/v1/internal/cleanup` は専用サービスアカウントのGoogle OIDCで認証し、期限切れピンを整理します。Firebaseの利用者認証とは別経路です。設定・定期実行は [期限切れピン整理](pin-cleanup.md) を参照してください。作品画像・一時アップロードの整理は未実装です。
+`POST /api/v1/internal/cleanup` は専用サービスアカウントのGoogle OIDCで認証し、期限切れピンを整理します。Firebaseの利用者認証とは別経路です。設定・定期実行は [期限切れピン整理](cleanup.md) を参照してください。作品期限削除とアップロード試行の回収も実装済みです。同じ運用文書を参照してください。
+
+### APIごとの権限
+
+| API | 必要な権限 |
+|---|---|
+| /health | 認証不要 |
+| /api/v1/users/register | Google認証済み。停止ユーザーは拒否 |
+| お題・ピン・履歴・作品・Visionデモ | Google認証済み、Firestore登録済み、active |
+| /api/v1/internal配下の整理API | 専用サービスアカウントOIDCと設定したaudience |
+
+通常APIのルーター登録でDepends(active_user)を適用し、各処理でもActiveUserで本人を特定する。お題削除は所有者、既読・いいね・作品削除は受信者に限定する。401は未認証、403は停止中、404は未登録または参照不可。権限のない作品の存在は漏らさない。
+
+back/tests/test_api_authorization.pyで未認証・未登録・停止、他人の操作で書込みが発生しないことを確認する。実クラウドのIAM確認とは分ける。
 
 ## エラー・追跡・ログ
 

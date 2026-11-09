@@ -25,6 +25,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  final Set<int> _visitedTabs = {0};
 
   List<Widget> get _pages => [
     // 一覧にもログイン済み状態と共通のAPI接続先を渡す。
@@ -67,7 +68,14 @@ class _MainScreenState extends State<MainScreen> {
         ),
         centerTitle: true,
       ),
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      // Build each tab on first visit and preserve its state afterwards.
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          for (final (index, page) in _pages.indexed)
+            _visitedTabs.contains(index) ? page : const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: DecoratedBox(
         position: DecorationPosition.foreground,
         decoration: const BoxDecoration(
@@ -77,6 +85,7 @@ class _MainScreenState extends State<MainScreen> {
           selectedIndex: _selectedIndex,
           onDestinationSelected: (index) {
             setState(() {
+              _visitedTabs.add(index);
               _selectedIndex = index;
             });
           },

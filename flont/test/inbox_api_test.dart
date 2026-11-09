@@ -14,6 +14,7 @@ http.Response page(String title, {String? cursor}) => http.Response(
         'submissionId': title,
         'artistId': 'artist',
         'artistNickname': 'Artist',
+        'artistProfileAvailable': true,
         'sourceIdeaId': 'deleted-idea',
         'sourceIdeaSnapshot': {
           'title': title,

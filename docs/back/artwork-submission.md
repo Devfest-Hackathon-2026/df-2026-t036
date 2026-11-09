@@ -2,7 +2,7 @@
 
 ## リクエスト
 
-`POST /api/v1/artworks` にFirebase IDトークンとmultipartの`ideaId`、`file`を送る。初回確定は201、同じ画像バイト列の再送は200で同じ`submissionId` / `submittedAt`を返す。入力上限20 MiB、本文上限20 MiB + 64 KiB。Flutterの通常送信ボタンから接続済み。
+`POST /api/v1/artworks` にFirebase IDトークンとmultipartの`ideaId`、`file`、`shareArtistProfile`（既定false）を送る。公開範囲は [プロフィール](profile.md) を参照。初回確定は201、同じ画像バイト列の再送は200で同じ`submissionId` / `submittedAt`を返す。入力上限20 MiB、本文上限20 MiB + 64 KiB。Flutterの通常送信ボタンから接続済み。
 
 ## 資格と審査
 
@@ -29,7 +29,7 @@ DBの確定結果が不明な場合は、先にFirestoreトランザクション
 
 `POST /api/v1/internal/artwork-cleanup`は既存cleanupと同じ専用サービスアカウントOIDCで認可し、期限到達・回収失敗の記録を最大100件処理する。メンテナンス中も利用可能。body・queryは不要。`scanned` / `scannedObjects` / `failed` / `hasMore`を返す。hasMoreがtrueなら再実行する。Cloud Scheduler等で定期実行を設定する必要がある。
 
-この回収APIは未確定画像を対象とする。7日経過した確定作品の物理削除、画像のダウンロード専用APIは今回の対象外。既存の受信箱・描いた履歴・累計APIは確定した投稿をそのまま取得できる。
+この回収APIは未確定画像を対象とする。確定作品の期限削除は別の内部APIで行う。詳細は [定期削除](cleanup.md) を参照。端末保存は画像取得済みbytesを使い、専用APIは設けない。既存の受信箱・描いた履歴・累計APIは確定した投稿をそのまま取得できる。
 
 ## 実環境確認
 
@@ -49,6 +49,6 @@ DBの確定結果が不明な場合は、先にFirestoreトランザクション
 
 `GET /api/v1/artworks/{submissionId}/image` は登録済みactiveの受信者だけにWebPを返す。存在しない作品・他人の作品・削除済み・期限到達は同じ404とする。Storage取得の前後で状態を再確認し、no-storeとnosniffを付けて返す。公開URLは発行しない。受信画面は認証付きで取得し、実画像の表示成功後に既読APIを呼ぶ。
 
-投稿画面からお題詳細へ戻った場合、サーバーのcanSubmitとhasDrawnを再取得して送信ボタンを更新する。プレビューは実APIを呼ばない。期限切れ作品画像の物理削除は別途実装が必要。
+投稿画面からお題詳細へ戻った場合、サーバーのcanSubmitとhasDrawnを再取得して送信ボタンを更新する。プレビューは実APIを呼ばない。期限切れ作品画像の物理削除は `/api/v1/internal/artwork-expiry-cleanup` とFirestore TTLで行う。
 
 medicalとracyは表示用に取得するが、判定から除外する。両カテゴリの高い値・不明・欠損で投稿を拒否または保留にしない。ポリシーはpossible-allowed-v2。

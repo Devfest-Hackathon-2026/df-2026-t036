@@ -6,12 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/page_layout.dart';
+import '../widgets/page_loading_gap.dart';
 import '../theme/app_theme.dart';
 import '../widgets/received_artwork_card.dart';
 import '../widgets/artwork_opening_route.dart';
 import 'package:flutter/gestures.dart';
 import 'ideas_screen.dart';
 import 'artwork_detail_screen.dart';
+import 'public_profile_screen.dart';
 import '../models/received_artwork.dart';
 import '../preview/artwork_preview.dart';
 import '../services/artwork_image_cache.dart';
@@ -296,6 +298,49 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _deleteArtwork(ReceivedArtwork artwork) async {
+    final id = artwork.submissionId!;
+    if (_isPreview) {
+      setState(() {
+        _previewDeleted.add(id);
+        _imageCache.remove(id);
+        _resetPage();
+      });
+      return;
+    }
+    final token = widget.idTokenProvider == null
+        ? await FirebaseAuth.instance.currentUser?.getIdToken()
+        : await widget.idTokenProvider!();
+    if (token == null || token.isEmpty) {
+      throw StateError('再度ログインしてください。');
+    }
+    final base = widget.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _client
+        .delete(
+          Uri.parse('$base/api/v1/artworks/${Uri.encodeComponent(id)}'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 204) {
+      var message = '作品を削除できませんでした。';
+      try {
+        message =
+            ((jsonDecode(utf8.decode(response.bodyBytes))
+                        as Map<String, dynamic>)['error']
+                    as Map<String, dynamic>)['message']
+                as String;
+      } catch (_) {}
+      throw StateError(message);
+    }
+    _imageCache.remove(id);
+    if (mounted) {
+      setState(() {
+        _inbox.removeWhere((item) => item.submissionId == id);
+        _resetPage();
+      });
+    }
+  }
+
   void _retainCachedImages() {
     _imageCache.retain({
       for (final artwork in _artworks)
@@ -373,22 +418,25 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
           onLike: artwork.submissionId == null
               ? null
               : () => _likeArtwork(artwork),
-          allowFileActions: _isPreview,
-          onDelete: _isPreview
-              ? () async {
-                  if (!mounted) {
-                    throw StateError('Inbox is no longer available');
-                  }
-                  setState(() {
-                    _previewDeleted.add(artwork.submissionId!);
-                    _imageCache.remove(artwork.submissionId!);
-                    _resetPage();
-                  });
-                }
-              : null,
+          allowFileActions: true,
+          imageContentType: _isPreview ? 'image/png' : 'image/webp',
+          onDelete: () => _deleteArtwork(artwork),
           onMarkRead: artwork.submissionId == null
               ? null
               : () => _markArtworkRead(artwork),
+          onViewArtistProfile:
+              artwork.artistProfileAvailable && artwork.submissionId != null
+              ? () => Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => PublicProfileScreen(
+                      submissionId: artwork.submissionId!,
+                      apiBaseUrl: widget.apiBaseUrl,
+                      client: _client,
+                      idTokenProvider: widget.idTokenProvider,
+                    ),
+                  ),
+                )
+              : null,
         ),
       ),
     );
@@ -623,28 +671,23 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
     final titles = _titles;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxHeight < 520;
-        final headingGap = compact ? 8.0 : 16.0;
         // 下部操作は本文内に置き、固定せずカードと一緒にスクロールさせる。
         return SingleChildScrollView(
-          padding: layout.insets,
+          padding: EdgeInsets.symmetric(horizontal: layout.horizontalPadding),
           child: Center(
             child: ConstrainedBox(
               // 外側の余白も含めた全体幅を他の画面にそろえる。
               constraints: BoxConstraints(maxWidth: layout.contentWidth),
               child: SizedBox(
-                height: (constraints.maxHeight - layout.insets.vertical).clamp(
-                  240.0,
-                  double.infinity,
-                ),
+                height: constraints.maxHeight.clamp(240.0, double.infinity),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    PageLoadingGap(loading: _loading),
                     Text(
                       '受信箱',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    if (_loading) const LinearProgressIndicator(),
                     if (_error != null)
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
@@ -658,13 +701,13 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                           ),
                         ],
                       ),
-                    SizedBox(height: headingGap),
+                    const SizedBox(height: PageLayout.verticalGap),
                     Expanded(
                       child: ClipRect(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 24,
-                            vertical: 32,
+                            vertical: PageLayout.verticalGap,
                           ),
                           child: Center(
                             child: ConstrainedBox(

@@ -1,9 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:illustration_exchange/screens/main_screen.dart';
 import 'auth_gate.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_scroll_behavior.dart';
+import 'widgets/font_loading_gate.dart';
 
 const _developmentPreview = bool.fromEnvironment('DEV_PREVIEW');
 
@@ -28,26 +28,41 @@ class IllustrationExchangeApp extends StatelessWidget {
       theme: AppTheme.light,
       // 一覧や遷移先も含め、スクロール操作とバーの表示方針を統一する。
       scrollBehavior: const AppScrollBehavior(),
-      // 開発プレビューはデバッグ時だけ有効にし、通常は認証画面から開始する。
+      // DEV_PREVIEWを明示した時だけサンプルを表示し、通常は認証画面から開始する。
       home:
           home ??
-          (kDebugMode && _developmentPreview
-              ? const Banner(
-                  message: 'プレビュー',
-                  location: BannerLocation.topEnd,
-                  child: MainScreen(
-                    me: {
-                      'uid': 'preview-user',
-                      'nickname': 'プレビュー利用者',
-                      'status': 'active',
-                      'ideaCount': 2,
-                      'drawnCount': 4,
-                      'likesReceived': 3,
-                    },
-                    googleEmail: 'preview@example.test',
-                  ),
-                )
-              : const AuthGate()),
+          FontLoadingGate(
+            child: (_developmentPreview
+                ? const Banner(
+                    message: 'プレビュー',
+                    location: BannerLocation.topEnd,
+                    child: MainScreen(
+                      me: {
+                        'uid': 'preview-user',
+                        'nickname': 'プレビュー利用者',
+                        'status': 'active',
+                        'ideaCount': 2,
+                        'drawnCount': 4,
+                        'likesReceived': 3,
+                        'bio': '水彩と色鉛筆で、物語のある風景を描いています。',
+                        'socialLinks': [
+                          {
+                            'type': 'pixiv',
+                            'label': 'pixiv',
+                            'url': 'https://www.pixiv.net/users/example',
+                          },
+                          {
+                            'type': 'x',
+                            'label': 'X',
+                            'url': 'https://x.com/example',
+                          },
+                        ],
+                      },
+                      googleEmail: 'preview@example.test',
+                    ),
+                  )
+                : const AuthGate()),
+          ),
     );
   }
 }

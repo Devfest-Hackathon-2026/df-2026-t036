@@ -10,7 +10,7 @@ void main() {
       expect(layout.contentWidth, double.infinity);
       expect(layout.insets.left, 4);
       expect(layout.insets.right, 4);
-      expect(layout.insets.top, 16);
+      expect(layout.insets.top, PageLayout.verticalGap);
       expect(layout.padding, 16);
     }
   });

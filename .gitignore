@@ -27,3 +27,6 @@ __pycache__/
 # Firebase CLIの公開キャッシュと認証関連の診断ログは共有しない。
 /.firebase/
 /firebase-debug*.log
+
+# PowerShellが生成するローカルキャッシュはGit管理しない。
+/Microsoft/

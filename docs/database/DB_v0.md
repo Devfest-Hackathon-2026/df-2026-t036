@@ -1,11 +1,9 @@
 # EWOCURU ハッカソン版 DB・API仕様書
 
-> 現行サーバー実装: 画像は `POST /api/v1/artworks` でFastAPIへ直接送信し、再検証・Vision承認後にWebPで正式保存する。以下のprepare/commit・一時アップロード方式は従来案。現行の投稿・再送・回収契約は [作品投稿API](../back/artwork-submission.md) を参照。
 
-- **版**：v0.9（2026-11-05、細部整理案採用）
-- **対象**：Flutter Webのハッカソン版。設計仕様であり、実装完了を示さない。
+- **整理日**：2026-11-10。現行コードのDB・API契約。公開版は [版別履歴](../version/README.md) を参照。
+- **対象**：Flutter Webのハッカソン版。コード実装と、本番環境への適用・動作確認は区別する。
 - **技術**：Firebase Authentication（Google）、Firestore、Cloud Storage、Cloud Run / FastAPI、Firebase Hosting
-- **表記**：確定＝合意済みの機能範囲、実装案＝実装時に調整可能な詳細、未決定＝実装前に確定する値
 - **正本**：DB・APIと機能範囲は本書を優先。総合仕様書も同じ範囲にそろえる。
 
 ## 0. 採用範囲と保存階層
@@ -13,7 +11,8 @@
 | 機能 | 今回の方針 |
 |---|---|
 | ログイン | 画面のGoogleログイン。招待コード・メール許可リストなし |
-| 表示名 | 初回登録時にサーバーでランダム生成し保存。変更機能なし |
+| 表示名 | 初回登録時にサーバーでランダム生成。以降は本人がプロフィール編集で変更可能 |
+| プロフィール文・SNSリンク | 任意の自己紹介とHTTPSリンクをusers/{uid}へ保存し、本人更新・公開項目のみ取得 |
 | お題・ピン | 5スロット、タグ、ピン5件、7日／30日のルールを維持 |
 | 作品 | JPEG/PNG/HEIC/HEIF入力（WebP入力非対応）、WebP完成画像、1人1お題1回、受信者限定、送信から7日 |
 | 受信箱 | 自動更新、作品の未読・既読を維持 |
@@ -29,22 +28,22 @@ Firebaseプロジェクト
 ├─ Authentication
 │   └─ Googleアカウント（uid）
 ├─ Firestore
-│   ├─ users/{uid}                  ランダム表示名・状態・累計
+│   ├─ users/{uid}                  ランダム表示名・状態・累計・自己紹介・SNSリンク
 │   │   └─ drawnHistory/{submissionId} 描いた履歴（別文書）
 │   ├─ userSlots/{uid}              掲載枠（独立文書）
 │   │   └─ slots                   文書内map。サブコレクションではない
 │   ├─ userPins/{uid}               ピンID配列（独立文書）
 │   ├─ ideas/{ideaId}               お題
 │   ├─ artworks/{submissionId}      受信作品情報
-│   └─ uploadSessions/{uploadId}    アップロード管理
+│   ├─ artworkSubmissions/{submissionId} 投稿予約・完了結果
+│   ├─ artworkUploads/{token}       試行の保存先・回収管理
+│   └─ cleanupState/{job}           内部処理のリース・カーソル
 └─ Cloud Storage
-    ├─ 一時アップロード画像
-    └─ 正規化済み作品画像（表示・保存に共用）
+    └─ artworks/{submissionId}/{token}.webp（非公開の完成画像）
 ```
 
-B案を維持し、Firestore直下6種類とusers配下の履歴1種類で構成する。通知・publicProfiles・jobs・idempotencyKeysは設けない。サブコレクション更新だけでは親usersは更新されないが、累計更新や認可の読み取りによる競合は残る。
+上記のコレクションとusers配下の履歴で構成する。通知・publicProfiles・jobs・idempotencyKeysは設けない。公開プロフィールはusers文書の許可項目だけを公開API DTOで返す。自己紹介・SNSリンクは任意項目で、未設定時は空値として扱う。プロフィール画像・代表作品は画像保存・公開範囲の設計が別途必要なため、このAPIには含めない。サブコレクション更新だけでは親usersは更新されないが、累計更新や認可の読み取りによる競合は残る。
 
-構造図： [HTML](database_v0.html) ／ [PNG](database_v0.png) ／ [SVG](database_v0.svg)
 
 ## 1. 業務ルール（確定）
 
@@ -68,22 +67,38 @@ B案を維持し、Firestore直下6種類とusers配下の履歴1種類で構成
 
 ## 2. コレクション定義
 
+### プロフィールAPI
+
+| Method / path | 認証 | 用途 |
+|---|---|---|
+| `GET /api/v1/me` | Google認証・active | 本人情報に自己紹介 `bio` と `socialLinks` を含める |
+| `PATCH /api/v1/me/profile` | Google認証・active | `nickname`・`bio`・SNSリンク一式を更新。nicknameは省略可、部分フィールド・未知フィールドは受け付けない |
+| `GET /api/v1/me/artworks/{submissionId}/artist-profile` | Firebase認証・作品の受信者 | 描き手が送信時に公開を選んだ作品に限りプロフィールを返す |
+
+`nickname` は1〜24文字、前後空白を除去し、空欄と制御文字を拒否する。省略された場合は従来値を維持する。`bio` は最大300文字、SNSリンクは最大5件。リンク種別は `x` / `instagram` / `pixiv` / `youtube` / `other`。全てHTTPSのみとし、各既知SNS種別は対応ホスト名を検証する。`other` は任意のHTTPSホストを許す。各リンクの `label` は1〜40文字、URLは最大2048文字。同一URLの重複は末尾スラッシュと大文字小文字を正規化して拒否する。集計値は更新不可。
+
+**作品ごとのプロフィール公開**: 作品送信時に描き手が受信者へのプロフィール公開を選ぶ。作品文書に `artistProfileVisibleToRecipient` を保存し、既定値はfalse。falseの場合はInbox DTOの `artistId` と `artistNickname` をnullにする。受信者限定取得APIは作品文書のrecipientId・公開選択・期限・削除状態を検証する。一般公開のユーザープロフィール取得APIは設けない。
+
+プロフィール画像・代表作品の登録APIは未実装。Cloud Storageでの公開方式、画像制限、公開同意、古い画像の削除方式を決めてから追加する。
+
 全てlowerCamelCase。UIDはFirebase Auth UID。文書IDは保存パスの一部であり、各文書への重複保存は必須ではない。
 
 ### 2.1 users/{uid}
 
 | フィールド | 型 | 意味 |
 |---|---|---|
-| nickname | string | 初回登録でサーバーがランダム生成して固定 |
+| nickname | string | 初回登録でサーバーがランダム生成。その後は本人がプロフィールAPIで更新可能 |
 | status | string | active / suspended。deletingは今回導入しない |
 | ideaCount | integer | 未削除のお題累計。30日経過で減らさず、手動削除時に1回だけ減算 |
 | drawnCount | integer | 確定送信累計。作品削除後も維持 |
 | likesReceived | integer | 描き手が受けたいいね累計。取消・作品削除による減算なし |
+| bio | string | 任意の公開自己紹介。最大300文字 |
+| socialLinks | array | 任意のHTTPS SNSリンク。最大5件 |
 | createdAt | timestamp | 登録時刻 |
 
-表示名の実装案：固定の単語リストとランダムな文字・数字を組み合わせる。重複を許可し、識別はUIDで行う。Googleの本名・メールから生成しない。登録を再送しても名前・カウンターを再生成しない。表示形式は未決定。
+表示名の初期生成：固定の単語リストとランダムな文字・数字を組み合わせる。重複を許可し、識別はUIDで行う。Googleの本名・メールから生成しない。登録を再送しても名前・カウンターを再生成しない。プロフィール編集後は変更後の名前を表示する。
 
-メールはAuthにのみ保持。本人にはMe DTO、他人にはUIDとnicknameだけを公開する。お題一覧のownerNickname・受信一覧のartistNicknameへAPIがまとめて名前を付加し、1カードずつのAPI呼び出しを避ける。
+メールはAuthにのみ保持。本人にはMe DTOを返す。プロフィールDTO（UID・nickname・bio・socialLinks）は、描き手が送信時に公開を許可した作品の受信者に限り返す。お題一覧のownerNicknameはAPIがまとめて名前を付加する。受信箱のartistNicknameは公開許可がある場合だけ返す。一覧上の名前はプロフィール編集時点と異なる場合があり、プロフィール画面はAPIから最新値を取得する。
 
 ### 2.2 userSlots/{uid}
 
@@ -116,178 +131,94 @@ ideaIdはFlutterが操作ごとにUUID v4を生成し、同じ操作の再送で
 | recipientId | string | 受信者UID |
 | sourceIdeaId | string | 元のお題ID |
 | sourceIdeaSnapshot | map | title / description / tags / ownerIdの送信時点の複製 |
+| artistProfileVisibleToRecipient | boolean | 描き手が送信時に選択。既定false、未設定の旧作品もfalseとして扱う |
 | storagePath | string | 正規化済み画像1枚の非公開パス |
+| storageBucket | string | 画像の保存バケット |
+| contentType | string | image/webp |
+| visionPolicyVersion | string | 審査ポリシーの版 |
+| purgeAt | timestamp / 未設定 | 画像削除成功後に設定するTTL用時刻 |
 | liked | boolean | 初期false、trueへの変更だけ許可 |
 | readAt | timestamp / null | 必須。初期null、受信者の初回詳細表示時に設定 |
 | createdAt | timestamp | 送信確定時刻 |
 | expiresAt | timestamp | createdAt＋7日 |
 | deletedAt | timestamp / null | 初期null、受信者の手動削除時に設定 |
 
-thumbnailPathは作らない。FlutterでJPEG・PNG等を可能な範囲で事前圧縮し、FastAPIで実データを検証、メタデータ除去後WebPへ正規化し、Vision SafeSearchで審査する。WebPは完成画像の保存形式とする。入力形式・Web HEIC対応、圧縮品質、最大画素数・安全容量上限は実機・Cloud Run・Vision上限を確認して決める。
+サムネイルは作らない。画像の検証・審査・完成形式と受付上限は [画像処理](../back/image-processing.md) に従う。
 
 ### 2.6 users/{uid}/drawnHistory/{submissionId}
 
 `artistId: string`、`ideaId: string`、`submittedAt: timestamp`、`lastLiked: boolean = false`。artistIdはパスのuidと一致。作品と同じsubmissionIdを使う。画像削除後も履歴画面・累計・再投稿防止に使い、画像URLやStorageパスは保存しない。削除済みのお題は参照不可カードで表示する。
 
-submissionIdは描き手×お題で一意にする。実装案は `UTF8(artistId) + 0x00の1バイト + UTF8(ideaId)` のSHA-256小文字16進。IDはサーバーで生成し、入力IDのNULを許可しない。
+submissionIdは描き手×お題で一意にする。生成方式は `UTF8(artistId) + 0x00の1バイト + UTF8(ideaId)` のSHA-256小文字16進。IDはサーバーで生成し、入力IDのNULを許可しない。
 
-### 2.7 uploadSessions/{uploadId}
+### 2.7 artworkSubmissions/{submissionId}
 
-`artistId, ideaId, submissionId, status, tempPath, objectGeneration, createdAt, expiresAt, committedAt` を持つ。時刻はtimestamp、committedAtは初期null。objectGenerationはstring/null。statusはpending / committed / expired。有効期間は暫定30分。uploadIdはAPIがランダム生成する。
+status、token、digest（入力バイト列のSHA-256）、expiresAt、artistProfileVisibleToRecipientを保持する。処理中はprocessing、確定後はcommittedとresult（submissionId / submittedAt）を記録する。未完了の予約は30分有効。同じ確定済み画像の再送は保存結果を返し、異なる画像で置換しない。
 
-同じ画面内の再試行は同じuploadIdを使う。タブ終了後のアップロード再開・進捗復元は実装しない。新しい画面では送信済み履歴を確認し、未確定なら新規prepareから始める。放置セッションと画像のサーバー回収は残す。
+### 2.8 artworkUploads/{token}
+
+submissionId、token、bucket、storagePath、status、expiresAt、artistProfileVisibleToRecipientを保持する。画像保存前に作成し、試行ごとに別パスを使用する。processing / committed / abandoned等の回収状態はAPIが管理する。正確な状態遷移は [作品投稿API](../back/artwork-submission.md) を参照。
+
+### 2.9 cleanupState/{job}
+
+pins、artworkExpiry等の内部処理がリース・カーソル・完了時刻を保持する。孤立画像走査ではページ位置を保存する。一般利用者は直接操作できない。
+
+### サーバー管理項目
+
+usersには投稿・削除の頻度制限用時刻配列も保存する。クライアントから更新させず、Me DTOにも含めない。上限は [投稿制限](../back/post-rate-limits.md)、[定期削除](../back/cleanup.md) を参照。
 
 ## 3. API・認可の共通方針
 
-Firestoreの全クライアント読み書きをRulesで拒否し、データ操作はFastAPIへ集約する。Admin SDKはRulesを通らないため、APIがIDトークン・active状態・所有者／受信者・期限を検証する。AuthのGoogleログインとprepare発行の期限付き一時画像書込だけは別経路。完成画像の直接アクセスは禁止。
+Firestoreのクライアント直接読み書きをRulesで拒否し、データ操作・画像送信・取得をFastAPIへ集約する。通常APIはGoogle IDトークン、登録済みactive状態、所有者／受信者・期限を検証する。内部APIは専用サービスアカウントのOIDCで認証する。
 
-メンテナンスはサーバー設定（実装案：MAINTENANCE_MODE）で切り替え、通常API・画像API・prepare・commitへ503 MAINTENANCEを返す。設定変更後の反映手順・全インスタンスへの適用を確認する。/healthと内部の期限削除は停止対象外。発行済み一時アップロード権限や配信済みデータの回収は保証しない。メンテナンス管理画面は作らない。
+パスは /api/v1 配下。/healthは例外で認証・外部接続が不要。メンテナンス時は通常APIに503を返し、healthと認証付き内部整理は継続する。入力・UTC・ページング・エラー形式は [共通基盤](../back/backend-foundation.md) に従う。
 
-JSONはUTF-8、未知フィールド・不正な型を拒否。入力の前後空白を除去し、必須判定・長さ検証を行う。文字数はUnicodeコードポイント数とする実装案。タグは完全一致の重複を排除する。全APIパスは /api/v1 配下。/healthだけプレフィックス外。
+## 4. 現行API一覧
 
-## 4. API一覧と主要入出力
-
-| HTTP | パス | 入力・処理 | 成功 |
-|---|---|---|---|
-| POST | /users/register | 本文なし。Google認証UIDで初期化・ランダム名生成 | 初回201、再送200、Me |
-| GET | /me | 本人の名前・状態・3種の累計 | 200、Me |
-| GET | /ideas | 有効なTLを新着順に取得 | 200、一覧 |
-| POST | /ideas | ideaId / title / description / tags | 初回201、同じ要求の再送200、Idea |
-| GET | /ideas/{ideaId} | お題詳細と閲覧・送信資格 | 200、Idea |
-| DELETE | /ideas/{ideaId} | 本人の論理削除・枠解放・累計減算 | 204、論理削除済みの再送も成功 |
-| GET | /me/ideas | 本人の未削除お題履歴 | 200、一覧 |
-| GET | /me/slots | 掲載枠・空き枠 | 200、maxSlots / slots / serverTime |
-| GET | /me/pins | 有効なピンとお題 | 200、maxPins / items / serverTime |
-| POST | /pins/{ideaId} | 他人のお題をピン。既存の有効ピンは追加しない | 204 |
-| DELETE | /pins/{ideaId} | ピン解除。未登録・欠損でも成功 | 204 |
-| POST | /artworks/prepare | ideaId / contentType / byteSize | 201、uploadId / uploadUrl / method / requiredHeaders / expiresAt |
-| POST | /artworks/commit | uploadId。画像検証・送信資格再確認 | 初回201、同じuploadIdの再送200、submissionId / submittedAt |
-| GET | /me/artworks/inbox | 本人の有効な受信作品、自動更新対象 | 200、一覧 |
-| POST | /artworks/{submissionId}/read | 受信者の初回既読、再送は初回時刻を維持 | 200、readAt |
-| GET | /artworks/{submissionId}/image | 受信者限定で正規化画像を配信 | 200、画像 |
-| GET | /artworks/{submissionId}/download | 同じ正規化画像を端末保存 | 200、画像 |
-| POST | /artworks/{submissionId}/like | 受信者の取消不可いいね | 200、submissionId / liked: true |
-| DELETE | /artworks/{submissionId} | 即時不可視化、画像削除は定期処理 | 204 |
-| GET | /me/drawn-history | 本人の履歴・参照可能なお題・最終いいね | 200、一覧 |
-| POST | /internal/cleanup | 内部認証で作品・一時画像・期限切れピンを整理 | 実装時に応答を固定 |
-
-名前変更・通知・退会のAPIは作らない。画像APIはCache-Control: private, no-store、保存APIはContent-Disposition: attachmentを付ける。公開URLや署名URLへのリダイレクトを返さない。
-
-### 実装進捗（2026-11-06）
-
-以下はこのリポジトリのFastAPIコード上の実装状況。**実装済みはコードがある状態を示し、実Firebase／Firestore／Storageを使った本番相当の動作確認完了を意味しない。**
-
-| 状態 | API | 実装内容・残作業 |
+| Method | パス（/api/v1配下） | 内容 |
 |---|---|---|
-| 実装済み | `GET /health` | 起動確認。認証・外部サービス接続を必要としない。 |
-| 実装済み | `POST /users/register`、`GET /me` | Google IDトークン検証、初回登録、本人情報と累計取得。 |
-| 実装済み | `/ideas`、`/me/ideas`、`/me/slots`、`/me/pins`、`/pins/{ideaId}` | お題の作成・閲覧・削除、枠、ピンの取得・操作。Firestore処理を含む。 |
-| 準備済み | `ArtworkPrepareInput` | JPEG/PNG/HEIC/HEIFと正の申告サイズ（512 MiBの高い安全上限）の入力契約。Storageアップロード発行APIは未実装。 |
-| 実装済み・未動作確認 | `GET /me/drawn-history` | 描いた履歴と参照可能なお題、いいね状態をページ取得。 |
-| 実装済み・未動作確認 | `GET /me/artworks/inbox` | 有効な受信作品のメタデータ、描き手名、既読・いいね状態をページ取得。画像は扱わない。 |
-| 実装済み・未動作確認 | `POST /artworks/{submissionId}/read` | 受信者の初回既読時刻を冪等に記録。Flutterは画像表示成功後に呼ぶ。 |
-| 実装済み・未動作確認 | `POST /artworks/{submissionId}/like` | 受信者のいいねを一度だけ反映し、描き手の履歴と累計を更新。 |
-| 未実装 | `POST /artworks/prepare` | 送信資格・入力画像条件を確認し、一時アップロード用セッションと制限付きアップロード先を発行する。Cloud Storage連携が必要。 |
-| 未実装 | `POST /artworks/commit` | アップロード実体・形式・サイズ・送信資格を再検証し、画像を正規化して作品・描いた履歴・累計・セッション状態を一度だけ確定する。Cloud StorageとFirestoreの回復可能な連携が必要。 |
-| 未実装 | `GET /artworks/{submissionId}/image` | 受信者・期限・削除状態を確認して画像を認証付きで返す。Cloud Storage連携が必要。公開URLや長期有効URLは返さない。 |
-| 未実装 | `GET /artworks/{submissionId}/download` | 画像APIと同じ認可を適用し、正規化画像を添付ファイルとして返す。Cloud Storage連携が必要。 |
-| 未実装 | `DELETE /artworks/{submissionId}` | 受信者のみ作品を即時不可視化する。画像の物理削除は定期整理で再試行できるようにする。 |
-| 未実装 | `POST /internal/cleanup` | 内部呼び出しを認証し、期限切れ作品・一時セッション・一時画像・無効ピン等を上限付きで整理する。Cloud Storage連携とScheduler等の呼出設定が必要。 |
+| POST | /users/register | 本文なし。初回201、再送200 |
+| GET | /me | 本人の名前・状態・累計・bio・socialLinks |
+| PATCH | /me/profile | 本人のプロフィール更新 |
+| GET / POST | /ideas | TL取得・お題作成 |
+| GET / DELETE | /ideas/{ideaId} | 詳細取得・本人の論理削除 |
+| GET | /me/ideas、/me/slots、/me/pins | 本人のお題履歴・枠・ピン |
+| POST / DELETE | /pins/{ideaId} | ピン追加・解除 |
+| POST | /artworks | multipart直接投稿。初回201、同一確定画像の再送200 |
+| GET | /me/artworks/inbox | 受信作品一覧 |
+| GET | /me/artworks/{submissionId}/artist-profile | 公開選択した作品の受信者へ作者情報 |
+| GET | /me/drawn-history | 描いた履歴 |
+| GET | /artworks/{submissionId}/image | 受信者限定の画像取得 |
+| POST | /artworks/{submissionId}/read | 初回既読、再送で時刻を維持 |
+| POST | /artworks/{submissionId}/like | 受信者の取消不可いいね |
+| DELETE | /artworks/{submissionId} | 受信者の論理削除、204 |
+| POST | /vision-demo | 判定だけのデモ。作品保存なし |
+| POST | /internal/cleanup | ピン整理 |
+| POST | /internal/artwork-cleanup | アップロード試行・孤立画像回収 |
+| POST | /internal/artwork-expiry-cleanup | 作品画像削除・purgeAt設定 |
 
-未実装の作品送信・画像取得・削除・期限整理は、メタデータAPIとは別の作業段階。特にprepare/commitおよびimage/download/cleanupはCloud Storageを伴う。read/like・履歴・受信箱は画像バイト列を扱わない。Flutter側では画像が表示できてからreadを呼び、Storage実体の受け渡しとAPI認可を分離する。
+お題の入出力は [詳細API](ideas-api.md)、プロフィールは [プロフィール仕様](../back/profile.md)、投稿・再送は [投稿API](../back/artwork-submission.md) を参照。端末保存は取得済みbytesを使用し、専用のダウンロードAPIは設けない。画像応答はprivate, no-storeとし、公開URLへリダイレクトしない。
 
-現状、描いた履歴・受信箱・既読・いいねの追加コードはテスト実行環境の問題でpytest未実行であり、Firebase実データを用いた統合確認も未完了。Firestore複合インデックスをデプロイする環境では、同梱の `firestore.indexes.json` も適用する。
+## 5. 再試行・トランザクション
 
-Meはuid / nickname / status / ideaCount / drawnCount / likesReceived。Ideaはお題の保存項目とideaId / ownerNickname / canPin / canSubmit。InboxItemはsubmissionId / artistId / artistNickname / sourceIdeaId / sourceIdeaSnapshot / liked / readAt / createdAt / expiresAt。Storageパスは返さない。履歴はsubmissionId / ideaId / submittedAt / lastLiked / idea / ideaAvailability、参照不可ならideaはnull。
+お題作成はクライアント生成のideaIdと正規化済み入力で再送を判定する。作品は描き手とお題で一意のsubmissionId、入力digest、予約・試行状態で判定する。確定済みの同一画像は結果だけを返し、異なる画像は409。処理中の並行送信も409。クライアントへ試行tokenを発行して再開させる方式ではない。
 
-### 一覧・受信箱の自動更新（確定方針）
+作品の予約・確定時に資格を検証する。Firestore確定では作品・描いた履歴・drawnCount・完了状態を一度だけ更新する。いいねでは作品・履歴・likesReceivedを一度だけ更新する。Storage操作はFirestoreトランザクション外で行う。
 
-一覧はlimit（既定20、最大50）と不透明なcursorを受け取り、items / nextCursor / serverTimeを返す。同時刻の順序は文書ID DESC。期限・認可はページごとに再評価。スロット・ピンは固定上限のためページングしない。
+DB確定の成否が不明なら状態を確認し、確定済み画像は削除しない。未確定試行を回収可能な状態へ変更してから削除する。保存失敗・回収失敗は追跡文書を残し、内部APIで再試行する。
 
-受信箱は表示時に取得し、表示中・タブが前面の間だけ3分（180秒）間隔で先頭ページを再取得する。非表示・画面離脱で停止、復帰時に即取得。リクエストを重ねず、失敗時は待ち時間を延ばす。先頭ページの取得成功時に一覧をそのページで置き換え、既存の後続ページ・旧カーソルを破棄する。追加読込は新しいnextCursorから開始する。更新失敗時は既存一覧を維持する。古い追加読込の遅延応答が新しい一覧へ混ざらないよう、取得世代を確認して破棄する。期限切れは画面から除外する。手動更新も可能。WebSocket・SSE・Firestoreリスナーは使わない。
+## 6. 一覧・削除・運用
 
-一覧更新で既読化しない。詳細画面で画像を表示できた後にread APIを呼ぶ。失敗時は同じAPIを再試行し、readAtの初回値を上書きしない。既読要求も受信者・有効期限を検証する。受信箱・描いた履歴はlimit（既定20、最大50）と認証UIDに結び付いたカーソルでページングする。
+一覧はlimit（既定20、最大50）、不透明cursorを受け取り、items / nextCursor / serverTimeを返す。認可・期限はページごとに再評価する。スロット・ピンは固定上限なのでページングしない。
 
-### エラー・再試行
+受信箱は表示中・前面の間だけ180秒ごとに先頭ページを更新する。背景・画面離脱で停止し復帰時に取得。成功時は後続ページと旧カーソルを破棄し、失敗時は表示を保持する。古い通信結果を混在させない。一覧取得では既読にせず、画像表示成功後にreadを呼ぶ。
 
-共通形式は `{ error: { code, message, details, requestId } }`。401は認証不正、403は停止中、404 RESOURCE_UNAVAILABLEは不存在・資格なし・削除済み・期限切れ。認可済みの受付終了・上限・重複は409。容量413、形式415、入力422、制限429、一時障害・メンテナンス503。一時障害はRetry-Afterを尊重する。不存在・資格なし・削除済み・期限切れの画面表示は共通の「参照できません」とし、応答から存在を区別しない。通信障害は「読み込みに失敗しました／再試行」として分ける。
+作品はdeletedAt設定・expiresAt到達で即時取得不可。内部期限処理が画像を削除し、成功した文書だけpurgeAtを設定する。Firestore TTLはartworks.purgeAtで非同期に文書を削除する。expiresAtにTTLを設定しない。履歴・累計は維持する。Scheduler・TTL・IAMは [定期削除](../back/cleanup.md) に従い環境ごとに設定・検証する。
 
-通信断後も同じideaId / uploadIdで再試行する。別uploadIdで送信履歴があれば409 ALREADY_SUBMITTED。同じuploadIdの確定済み再送は履歴から結果だけを返し、画像や作品を再生成しない。セッション整理後は404となり得るため、履歴で送信結果を確認する。
+一覧の複合インデックスはfirestore.indexes.jsonを適用する。停止ユーザーは通常API操作を拒否する。機能のコード実装、ローカルテスト、本番相当の外部サービス検証は別々に確認する。
 
-## 5. トランザクションと画像回復
+## 7. 未対応・今後の判断
 
-| 操作 | 原子的に確認・更新する対象 |
-|---|---|
-| 初回登録 | usersの不存在確認、ランダム名保存、枠・ピン初期化。再送で初期化し直さない |
-| お題作成 | ユーザー状態、ID重複、空き枠、ideas作成、ideaCount加算 |
-| お題削除 | deletedAt初回設定、一致する枠のみ解放、ideaCount一度だけ減算 |
-| ピン操作 | userPins、登録時のお題資格、上限・重複確認 |
-| 作品確定 | 両当事者active、お題・ピン・期限、履歴不存在、作品・履歴作成、drawnCount加算、セッション確定 |
-| いいね | 受信者・作品期限、likedの初回変更、描き手の履歴lastLikedとlikesReceived加算 |
-| 作品既読 | 本人・作品の有効性、readAtがnullなら初回時刻設定 |
+プロフィールのアイコン・代表作品、一般公開のプロフィールURL、退会・通知・ブロックは今回の対象外。導入時には公開同意・画像の権利・容量・審査・保持期間・削除を定義する。受信者限定作品を代表画像へ自動転用しない。
 
-必要な読み取りを全て先に行う。時刻は各再試行で再評価する。StorageはFirestoreトランザクションの対象外なので、変換・画像保存・削除をトランザクション関数内で実行しない。
-
-1. prepareで資格を確認し、セッション・書込専用の一時アップロード先を発行。資格は予約しない。
-2. commitで実体を検証し、世代番号を固定してWebPへ変換する。SafeSearch対象となるstaging WebPを非公開保存し、Vision APIへgs:// URIを渡す。HEIC/HEIFをM1で受け付ける場合はサーバーでデコード可能なことをDocker/Linux実機サンプルで検証。
-3. SafeSearch通過後、uploadIdから決定する完成パスに、未存在条件でWebPを1枚copyする。保存時にセッション識別子・入力generation・staging generation・変換仕様versionをサーバー管理メタデータとして記録する。完成物保存後にDB確定が失敗した場合、同じuploadIdの再試行では既存完成画像のメタデータ・世代とセッションを照合し、一致する検証済み画像を上書きせず再利用する。並行保存で未存在条件が失敗した場合も、保存済み画像を再取得して同じ照合を行う。不一致なら確定せず409 UPLOAD_CONFLICTとし、上書きしない。入力世代は一度固定したら再試行で変更しない。
-4. 完成画像を再利用する場合も、Firestoreで資格・pending状態・期限・固定した入力世代を再確認し、作品・履歴・累計・committedを確定する。committedの再送は画像再処理より先に判定し、送信結果だけを返す。
-5. 期限切れセッションはexpiredへ遷移してから掃除し、commitと競合させる。committedが参照する完成画像は消さず、入力一時画像と審査staging画像だけ回収する。
-6. 未確定セッションは1回の掃除直後に消さず、実行中処理・発行済み書込権限の終了を待つ猶予期間中、繰り返し掃除する。猶予期間・処理上限を実装前に決定し、遅れて保存された画像も回収する。
-
-受信作品はdeletedAt設定時またはexpiresAt到達で即時に取得不可。定期処理は画像を削除してから作品文書を消す。失敗時は文書・パスを残して再試行。既にない画像は成功扱い。作品文書や掃除前のセッションへ直接TTLを設定しない。多重起動を避け、失敗をサーバーログに残す。
-
-## 6. 検索・認可・運用
-
-| 用途 | 対象と条件 |
-|---|---|
-| TL | ideas：deletedAtがnull、publishedUntil > now、新着順 |
-| 本人のお題 | ideas：ownerId == uid、deletedAtがnull、新着順 |
-| 受信箱 | artworks：recipientId == uid、deletedAtがnull、expiresAt > now、新着順 |
-| 履歴 | users/{uid}/drawnHistory：submittedAt DESC |
-| 掃除 | artworks：deletedAtまたはexpiresAt、uploadSessions：statusとexpiresAt |
-
-表は論理条件。実際の不等号条件・並び順をSDKで検証し、必要なインデックスを設定ファイルへ保存する。APIが認証UIDから本人のパスを決め、クライアント指定UIDは操作主体にしない。通知の検索・TTLは不要。停止ユーザーはデータ操作を拒否する。停止中のお題の公開扱いは実装前に固定する。
-
-退会機能は今回作らない。作品の7日期限・手動作品削除・お題の論理削除・放置画像の回収は引き続き実装する。管理者の停止・削除手順、実験データの最終保持期間は別途運用で決定する。将来usersを物理削除する場合は、サブコレクションが自動削除されない点を考慮する。
-
-## 7. 受け入れ条件
-
-- [ ] Googleログインで誰でも初回登録でき、ランダム名・累計・枠・ピンが初期化される。再送で値が変わらない。
-- [ ] 最大5掲載・5ピン。6件目・自己ピン・自己送信を拒否し、同時操作でも上限を守る。
-- [ ] タイトル・説明・タグの検証、編集不可、7日／30日境界と本人・送信済み描き手の例外が一致する。
-- [ ] Flutter圧縮後の画像をFastAPIで再検証し、WebPへ正規化してVision SafeSearchを通す。1枚の完成画像を表示と保存に共用し、サムネイルを生成しない。
-- [ ] 送信は1人1お題1回。通信断・並行commitでも作品・履歴・累計は1回だけ確定する。
-- [ ] 受信者のみ画像を取得可能。自動更新で新着表示され、一覧取得では未読を維持し、初回詳細表示で既読になる。
-- [ ] 画面離脱・背景タブでポーリングを停止し、復帰時に再取得。タブ終了後のアップロード再開は行わない。
-- [ ] いいねは1回、取消不可。作品削除後も3種の累計と描いた履歴の整合性が保たれる。
-- [ ] 古いお題の枠再利用後に古いお題を削除しても、新しい枠を消さない。
-- [ ] 期限・手動削除直後に作品を取得不可にし、失敗した物理削除と遅れて作られた画像も定期処理で回収できる。
-- [ ] 画像保存後のDB失敗・並行commitから再試行しても同じ検証済み完成画像を再利用し、上書き・二重加算をしない。不一致はUPLOAD_CONFLICT。
-- [ ] 自動更新成功時に後続ページと旧カーソルを破棄し、失敗時は既存一覧を保持。更新前の遅延応答が混入しない。
-- [ ] 不存在・資格なし・削除済み・期限切れは「参照できません」、通信障害は再試行表示へ統一。
-- [ ] 通知・退会・名前変更の画面、API、データが今回の必須機能に含まれない。
-- [ ] サーバー設定で503へ切替・解除でき、全インスタンスへの反映、画像APIとcommitへの適用を確認する。
-- [ ] Firestore直接アクセス拒否とAPI認可を検証し、iPad・スマホ・PCで一連の操作を確認する。
-
-## 8. 実装前に決める詳細
-
-ランダム表示名の形式、画像出力形式・画素数・容量の実測値、セッション期限（暫定30分）と掃除の猶予期間、内部削除の実行頻度、メンテナンス設定の反映手順、停止中ユーザーの公開内容、submissionId生成規則を固定する。これらは通知・退会機能を復活させる理由にはしない。
-
-## 9. DB要件（将来）
-
-ユーザーのプロフィール拡充として、**ユーザーアイコン**と**メイン作品**を登録・参照できるようにしたい。ハッカソン版の実装・受け入れ条件には含めず、導入時にDB・Storage・APIの設計を追加する。
-
-| 項目 | 将来追加したい情報・用途 |
-|---|---|
-| ユーザーアイコン | ユーザーに紐付くプロフィール画像。画像の保存先・変更・削除を管理する |
-| メイン作品 | ユーザーがプロフィールで代表として扱う作品。ユーザーとの紐付けと、作品画像または作品参照を管理する |
-
-保存するフィールド名・コレクション、画像形式・容量、公開範囲、差替え・削除、保持期間は未決定。メイン作品を専用画像として登録するか、既存作品から選択するかも導入時に決める。現行の受信作品は受信者限定・7日保持のため、公開プロフィールへ自動転用せず、公開可否・権利と保存期間を別途定義する。
-
-## 10. 公式参考資料
-
-- [Firestoreトランザクション](https://firebase.google.com/docs/firestore/manage-data/transactions)
-- [Firestoreの削除とサブコレクション](https://firebase.google.com/docs/firestore/manage-data/delete-data)
-- [Security RulesとサーバーSDK](https://firebase.google.com/docs/firestore/security/rules-conditions)
-- [Cloud Storageの世代条件](https://cloud.google.com/storage/docs/request-preconditions)
+管理者による停止・削除の運用、実験データの最終保持期間、負荷に応じた上限・監視・Scheduler間隔は環境側で決める。usersを物理削除する場合、サブコレクションは自動削除されないため別途対応する。
