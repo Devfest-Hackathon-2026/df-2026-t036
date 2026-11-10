@@ -16,7 +16,7 @@
 - [ ] 運営者の氏名または名称、住所、法人の場合の代表者、必要事項の公表方法を決める。
 - [ ] テストの招待窓口が実際に応答・引継ぎできることを確認し、一般公開の連絡先を決める。
 - [ ] アカウント、削除済みお題、描いた履歴、投稿予約、ログ、問い合わせ、バックアップごとの保存期間と削除担当を決める。
-- [ ] 確定作品の7日期限後の物理削除を実装・検証し、本文の暫定説明を確定する。
+- [ ] 確定作品の7日期限後の削除について、各公開環境でCloud Scheduler・Firestore TTL・IAMを設定し、画像削除と文書削除まで動作確認する。
 - [ ] 未確定画像と期限切れピンのScheduler設定、失敗時の監視・再試行を確認する。
 - [ ] 手動の退会・削除手順を作る。Firebase Authentication、Firestore、Storage、関連履歴等の対象と例外、本人確認、回答時期を明確にする。
 - [ ] Googleとの契約主体、利用リージョン・処理国、再委託先、外国での取り扱い、必要な情報提供・同意を確認する。国内リージョン指定だけで判断しない。
@@ -35,7 +35,7 @@
 |---|---|
 | 認証・独自ユーザー情報 | back/app/auth.py、users.py、flont/lib/screens/settings_screen.dart。Googleアカウント名・メールを独自users文書に保存しないことと、Firebase側の取得・保存を区別する。 |
 | 投稿と画像審査 | back/app/artwork_submission.py、vision_demo.py。作品とデモの画像がCloud Visionへ送信される。 |
-| 閲覧権限・期限 | back/app/artworks.py。受信者と期限を確認するが、期限後の確定作品の物理削除は実装されていない。 |
+| 閲覧権限・期限 | back/app/artworks.py、artwork_expiry.py。受信者と期限をAPIで検証し、期限削除APIがStorage画像の削除後にFirestore TTLへ引き渡す。定期実行・TTL設定は環境ごとに必要。 |
 | 投稿制限 | back/app/post_limits.py。記録は上限件数までで、期限経過後の次回投稿時に除去する。 |
 | 共通APIログ | back/app/middleware.py。本文等を記録しない設計だが、Uvicorn・Cloud Run・Firebase等の別ログまで同じとは限らない。 |
 | 現行規約 | flont/assets/legal/terms-test.md。問い合わせ窓口、手動退会、非表示と物理削除の区別を引き継ぐ。 |

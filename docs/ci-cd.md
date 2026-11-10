@@ -16,7 +16,7 @@ main・develop向けPRと両ブランチの更新時に、Python 3.11のpytest�
 1. GCPの課金、Cloud Run / Artifact Registry / IAM Credentials / Security Token Service APIを有効化し、Docker用Artifact Registryリポジトリを作成する。
 2. Cloud Runサービスを初期作成し、実行用サービスアカウント、GOOGLE_CLOUD_PROJECT、ARTWORK_BUCKET、CORS_ORIGINS等の環境変数、必要なSecret Manager参照、公開・認証設定を用意する。実行主体にFirestore・Storage・Vision等の必要な権限を与える。GitHubに.local.envや認証JSONを登録しない。
 3. デプロイ専用サービスアカウントを用意する。対象Cloud Runサービスにroles/run.developer、対象Artifact Registryリポジトリにroles/artifactregistry.writer、Cloud Run実行用アカウントに対するroles/iam.serviceAccountUserを付与する。
-4. GitHub OIDC用のWorkload Identity PoolとProviderを設定する。issuerは `https://token.actions.githubusercontent.com`。google.subject、attribute.repository_id、attribute.repository_owner_id、attribute.ref、attribute.environmentを対応するassertionにマッピングする。Provider条件でリポジトリID・所有者ID・mainブランチ・production環境を制限する。リポジトリIDは `gh api repos/outsidewhite/-Illustration-exchange --jq .id` で確認する。
+4. GitHub OIDC用のWorkload Identity PoolとProviderを設定する。issuerは `https://token.actions.githubusercontent.com`。google.subject、attribute.repository_id、attribute.repository_owner_id、attribute.ref、attribute.environmentを対応するassertionにマッピングする。Provider条件でリポジトリID・所有者ID・mainブランチ・production環境を制限する。対象リポジトリのIDは `gh api repos/Devfest-Hackathon-2026/df-2026-t036 --jq .id` で確認する。
 5. 該当リポジトリIDのprincipalSetに対して、デプロイ専用アカウントのroles/iam.workloadIdentityUserを付与する。条件を緩めて他リポジトリやPRのトークンを許可しない。
 6. GitHubのproduction Environmentを作成し、デプロイ可能ブランチをmainに限定する。必要ならレビュー承認ルールを設定する。
 
@@ -53,10 +53,10 @@ mainのブランチ保護でBackend tests、Flutter checks、Docker build and sm
 ```powershell
 # APIの公開先をビルド時に指定し、ローカル設定は上書きしない。
 Set-Location flont
-flutter build web --dart-define=API_BASE_URL=https://illustration-exchange-api-c3ovewncia-an.a.run.app
+flutter build web --dart-define=API_BASE_URL=https://YOUR_CLOUD_RUN_SERVICE_URL
 Set-Location ..
 # ビルド済みのWebアプリだけを公開する。
-npx firebase-tools deploy --only hosting --project project-025f8d03-50f2-4a97-a05
+npx firebase-tools deploy --only hosting --project YOUR_FIREBASE_PROJECT_ID
 ```
 
 Firebase CLIのログインと、正しいFirebaseプロジェクトのWeb公開設定を含む `flont/firebase-config.local.json` が必要です。このJSONはビルドに同梱されるため、サービスアカウントの秘密鍵などを入れないでください。DEV_PREVIEWは指定せず、通常の認証を使います。
@@ -65,7 +65,7 @@ Firebase CLIのログインと、正しいFirebaseプロジェクトのWeb公開
 
 公開後はGoogleログイン、お題投稿、作品送受信を実際のアカウントで確認します。ヘルスチェックや未認証での401確認だけでは、Cloud Run実行用サービスアカウントのFirestore・Storage・Vision権限は検証できません。
 
-Cloud Run実行用サービスアカウントは `illustration-api-runtime@project-025f8d03-50f2-4a97-a05.iam.gserviceaccount.com` です。プロジェクトにはDatastore User、Firebase Authentication Viewer、Service Usage Consumer、作品バケットにはStorage Object Userを付与しています。サービスアカウント秘密鍵は発行していません。
+Cloud Runには、Firestore・Firebase Authentication・作品バケット・Vision APIへのアクセスに必要な権限だけを持つ実行用サービスアカウントを設定してください。サービスアカウントのメールアドレスやプロジェクト固有のIAM構成は、この公開手順書には記載しません。秘密鍵を発行してソースやGitHubへ登録せず、実行環境のサービスアカウントまたはWorkload Identity Federationを使用してください。
 
 公開先サイトIDは `ewocuru` です。`firebase.json` の hosting.site で指定します。旧サイトは削除していません。新ドメインの `ewocuru.web.app` と `ewocuru.firebaseapp.com` をFirebase Authenticationの承認済みドメインにも登録します。
 
