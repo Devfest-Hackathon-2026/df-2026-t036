@@ -51,13 +51,6 @@ EWOCURU（エオクル）は、「描いてほしい人」と「描いてみた�
 | Skeb | [サービス紹介](https://skeb.co.jp/) |
 | ArtFight | [About](https://artfight.net/index.php/info/about) |
 
-## 提出情報
-
-- 作品名：EWOCURU
-- 公開アプリ：https://ewocuru.web.app
-- 提出コード：開発リポジトリのmain（9669ec9b31d57cb2e15f730f3d2795359e953c58）を履歴ごと取り込み
-- 開発リポジトリ：https://github.com/outsidewhite/-Illustration-exchange
-
 ## 実装した機能
 
 - **画像審査付きの作品投稿**: 描き手はお題ごとに1作品を投稿できます。画像を検証・WebP変換し、Cloud Vision SafeSearchの審査を通過した場合だけ保存します。二重送信や通信失敗時にも投稿状態と実績が重複しないよう、予約・確定を管理します。
@@ -95,6 +88,13 @@ EWOCURU（エオクル）は、「描いてほしい人」と「描いてみた�
 ## アーキテクチャ図
 
 ![すみません画像が表示できてないようです！](./docs/stac_image.png)
+
+## 提出情報
+
+- 作品名：EWOCURU
+- 公開アプリ：https://ewocuru.web.app
+- 提出コード：開発リポジトリのmain（9669ec9b31d57cb2e15f730f3d2795359e953c58）を履歴ごと取り込み
+- 開発リポジトリ：https://github.com/outsidewhite/-Illustration-exchange
 
 ## ライセンス
 
